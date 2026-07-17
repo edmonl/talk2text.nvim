@@ -1,0 +1,119 @@
+local runtime = require("talk2text.runtime")
+local uv = vim.uv or vim.loop
+
+local M = {}
+local temporary_sequence = 0
+
+local function normalize_first_line(contents)
+  local line = contents:match("^[^\n]*") or ""
+  return (line:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function read_first_line(path)
+  local stat, stat_err = uv.fs_lstat(path)
+  if not stat then
+    if stat_err and stat_err:match("^ENOENT") then
+      return false, ""
+    end
+    return nil, stat_err
+  end
+
+  local fd, open_err = uv.fs_open(path, "r", 0)
+  if not fd then
+    return nil, open_err
+  end
+  local contents, read_err = uv.fs_read(fd, 8192, 0)
+  local closed, close_err = uv.fs_close(fd)
+  if not contents then
+    return nil, read_err
+  end
+  if not closed then
+    return nil, close_err
+  end
+  return true, normalize_first_line(contents)
+end
+
+local function write_all(fd, contents)
+  local offset = 0
+  while offset < #contents do
+    local written, err = uv.fs_write(fd, contents:sub(offset + 1), offset)
+    if not written then
+      return nil, err
+    end
+    offset = offset + written
+  end
+  return true
+end
+
+local function atomic_write(path, contents)
+  local temporary
+  local fd
+  local open_err
+  for _ = 1, 100 do
+    temporary_sequence = temporary_sequence + 1
+    temporary = ("%s.tmp-%d-%d"):format(path, vim.fn.getpid(), temporary_sequence)
+    fd, open_err = uv.fs_open(temporary, "wx", 384)
+    if fd or not (open_err and open_err:match("^EEXIST")) then
+      break
+    end
+  end
+  if not fd then
+    return nil, open_err
+  end
+
+  local written, write_err = write_all(fd, contents)
+  local closed, close_err = uv.fs_close(fd)
+  if not written then
+    uv.fs_unlink(temporary)
+    return nil, write_err
+  end
+  if not closed then
+    uv.fs_unlink(temporary)
+    return nil, close_err
+  end
+
+  local renamed, rename_err = uv.fs_rename(temporary, path)
+  if not renamed then
+    uv.fs_unlink(temporary)
+    return nil, rename_err
+  end
+  return true
+end
+
+---Write a Neovim server address to a target file under the shared lock.
+---@param runtime_dir string
+---@param filename string
+---@param servername string
+---@return boolean|nil ok
+---@return string|nil err
+function M.write(runtime_dir, filename, servername)
+  return runtime.with_lock(runtime_dir, function()
+    return atomic_write(runtime_dir .. "/" .. filename, servername .. "\n")
+  end)
+end
+
+---Delete a target file only when it still identifies the expected server.
+---@param runtime_dir string
+---@param filename string
+---@param servername string
+---@return boolean|nil ok
+---@return string|nil err
+function M.delete_if_matches(runtime_dir, filename, servername)
+  return runtime.with_lock(runtime_dir, function()
+    local exists, value_or_err = read_first_line(runtime_dir .. "/" .. filename)
+    if exists == nil then
+      return nil, value_or_err
+    end
+    if not exists or value_or_err ~= servername then
+      return true
+    end
+
+    local removed, remove_err = uv.fs_unlink(runtime_dir .. "/" .. filename)
+    if not removed then
+      return nil, remove_err
+    end
+    return true
+  end)
+end
+
+return M
