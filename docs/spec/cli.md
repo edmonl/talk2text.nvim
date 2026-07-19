@@ -37,16 +37,16 @@ For `blank` and `short`, an already-absent transcript file counts as already cle
 
 The command uses shell-configurable hooks for notifications, Neovim control, default editor startup, and editor focus. Defaults:
 
-1. `TALK2TEXT_NVIM_NOTIFY_CMD`: `notify-send -t 5000 Talk2text "$@"`
-2. `TALK2TEXT_NVIM_CLIENT_CMD`: `nvim "$@"`
+1. `TALK2TEXT_NVIM_NOTIFY_CMD`: `notify-send -a talk2text -u normal -t 5000 Talk2text`
+2. `TALK2TEXT_NVIM_CMD`: `nvim`
 3. `TALK2TEXT_NVIM_TERMINAL_CMD`: empty.
 4. `TALK2TEXT_NVIM_FOCUS_CMD`: empty.
 
-The client and terminal hooks are required; notification and focus hooks are optional. A text delivery requires a non-empty client hook. When no usable target exists, it also requires a non-empty terminal hook to start the default editor. A missing required hook causes failure when it is needed and does not trigger target fallback. Optional hooks are skipped when empty.
+The Neovim command and terminal hook are required; notification and focus hooks are optional. A text delivery requires a non-empty Neovim command. When no usable target exists, it also requires a non-empty terminal hook to start the default editor. A missing required setting causes failure when it is needed and does not trigger target fallback. Optional hooks are skipped when empty.
 
-Each setting is read from its correspondingly named environment variable; when it is unset, the listed default applies. Each non-empty setting is trusted shell code run with `sh -c`. Hooks inherit the output command's current working directory. The notification, client, and terminal hooks receive generated arguments as shell positional parameters, represented by `"$@"` in the defaults. Runtime values are supplied this way and must never be interpolated into hook code. The notification hook receives the notification body as one argument. The client hook receives Neovim client arguments for server probes and loads. The terminal hook receives Neovim startup arguments. The focus hook receives no generated arguments.
+Each setting is read from its correspondingly named environment variable; when it is unset, the listed default applies. Each non-empty setting is trusted shell code run with `sh -c`. Hooks inherit the output command's current working directory. Generated arguments are appended internally, so settings do not include `"$@"`. Runtime values are supplied as shell positional parameters and must never be interpolated into hook code. The notification command receives the notification body as one argument. Neovim client arguments for server probes and loads are appended to the Neovim command. For default-editor startup, the Neovim command and its startup arguments are appended to the terminal command. The focus command receives no generated arguments.
 
-Users may set hooks as environment variables for an invocation or wrapper, or copy the command and adapt its defaults. The distributed client default satisfies the client-hook requirement, but users must configure the empty terminal hook before default-editor startup can work. See the [Sway and Alacritty example](../examples/sway-alacritty.md) for one starting point.
+Users may set hooks as environment variables for an invocation or wrapper, or copy the command and adapt its defaults. The distributed Neovim default satisfies the Neovim-command requirement, but users must configure the empty terminal hook before default-editor startup can work. See the [Sway and Alacritty example](../examples/sway-alacritty.md) for one starting point.
 
 # `text <path>`
 

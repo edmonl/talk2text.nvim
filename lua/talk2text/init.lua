@@ -7,7 +7,7 @@ local config = { runtime_dir = nil }
 local failed_path
 
 local function notify_error(message)
-  vim.notify("talk2text: " .. tostring(message), vim.log.levels.ERROR)
+  vim.notify("Talk2text: " .. tostring(message), vim.log.levels.ERROR)
 end
 
 local function remember_failure(path, explicit)
@@ -240,6 +240,7 @@ end
 ---@param path string
 function M._default_start(path)
   local buffer = vim.api.nvim_get_current_buf()
+  vim.api.nvim_set_option_value("buftype", "nofile", { buf = buffer })
   local registered, register_err = pcall(M.set_default_target)
   if not registered then
     notify_error(register_err)

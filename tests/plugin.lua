@@ -99,6 +99,8 @@ local function run()
   assert_true(#notifications == 1, "default registration failure was not reported exactly once")
   assert_equal(vim.api.nvim_buf_get_lines(0, 0, -1, false), { "startup still loads" }, "startup fallback load")
   assert_true(not exists(startup), "startup fallback load did not remove transcript")
+  assert_equal(vim.bo.buftype, "nofile", "default editor buffer type")
+  assert_true(not vim.bo.modified, "default editor transcript buffer was modified")
   local mapping = vim.fn.maparg("qq", "n", false, true)
   assert_true(type(mapping) == "table" and mapping.buffer == 1, "default editor mapping is not buffer-local")
 

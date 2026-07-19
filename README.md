@@ -100,7 +100,7 @@ A `short` transcript acts as a shortcut to remove the explicit target. Future te
 Starting a default editor requires a terminal hook because the distributed command does not assume a terminal emulator. For example, with Alacritty:
 
 ```sh
-export TALK2TEXT_NVIM_TERMINAL_CMD='exec alacritty --class talk2text-editor --title talk2text --command nvim "$@"'
+export TALK2TEXT_NVIM_TERMINAL_CMD='exec alacritty --class talk2text-editor --title talk2text --command'
 ```
 
 The default editor opens a no-file buffer, loads the transcript, and registers itself for later transcripts. In that buffer, `qq` copies the full buffer to the `+` clipboard register and quits without saving. If copying fails, the editor remains open.
@@ -111,12 +111,12 @@ When an existing default editor is reused, an optional focus hook can bring its 
 
 The output command is configured through environment variables:
 
-1. `TALK2TEXT_NVIM_CLIENT_CMD` controls Neovim server probes and remote loads. Its default is `nvim "$@"`.
-2. `TALK2TEXT_NVIM_TERMINAL_CMD` starts a default editor. It is empty by default and is required only when no usable target exists.
+1. `TALK2TEXT_NVIM_CMD` controls Neovim server probes, remote loads, and the Neovim process used for default-editor startup. Its default is `nvim`.
+2. `TALK2TEXT_NVIM_TERMINAL_CMD` starts a default editor. It is empty by default and is required only when no usable target exists. The Neovim command and generated arguments are appended to it.
 3. `TALK2TEXT_NVIM_FOCUS_CMD` focuses an existing default editor. It is empty by default and is best-effort.
-4. `TALK2TEXT_NVIM_NOTIFY_CMD` reports blank and short transcripts. Its default is `notify-send -t 5000 Talk2text "$@"` and is best-effort.
+4. `TALK2TEXT_NVIM_NOTIFY_CMD` reports blank and short transcripts. Its default is `notify-send -a talk2text -u normal -t 5000 Talk2text` and is best-effort.
 
-Each non-empty value is trusted shell code executed with `sh -c`. Generated values are passed as positional arguments and are available through `"$@"`; do not interpolate runtime values into hook code. Hooks inherit the output command's working directory. The focus hook receives no generated arguments.
+Each non-empty value is trusted shell code executed with `sh -c`. Generated arguments are appended internally, so command settings do not include `"$@"`. Runtime values are passed as shell positional parameters and are never interpolated into hook code. Hooks inherit the output command's working directory. The focus hook receives no generated arguments.
 
 ## Runtime Directory
 

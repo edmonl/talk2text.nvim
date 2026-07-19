@@ -62,7 +62,7 @@ mkdir -p "$transcript_dir"
 export TALK2TEXT_TEST_NOTIFY_LOG=$notify_log
 export TALK2TEXT_TEST_FOCUS_LOG=$focus_log
 # shellcheck disable=SC2016 # Expanded by the configured hook shell.
-export TALK2TEXT_NVIM_NOTIFY_CMD='printf "%s\n" "$1" >> "$TALK2TEXT_TEST_NOTIFY_LOG"'
+export TALK2TEXT_NVIM_NOTIFY_CMD='printf "%s\n" >> "$TALK2TEXT_TEST_NOTIFY_LOG"'
 # shellcheck disable=SC2016 # Expanded by the configured hook shell.
 export TALK2TEXT_NVIM_FOCUS_CMD='printf "focused\n" >> "$TALK2TEXT_TEST_FOCUS_LOG"'
 
@@ -166,7 +166,9 @@ printf 'started by terminal hook' > "$startup_path"
 export TALK2TEXT_TEST_ROOT=$project_root
 export TALK2TEXT_TEST_CWD_LOG=$startup_cwd_log
 # shellcheck disable=SC2016 # Expanded by the configured hook shell.
-export TALK2TEXT_NVIM_TERMINAL_CMD='pwd > "$TALK2TEXT_TEST_CWD_LOG"; nvim --headless -u NONE -i NONE -n --cmd "set runtimepath^=$TALK2TEXT_TEST_ROOT" "$@" +qa!'
+export TALK2TEXT_NVIM_CMD='nvim --headless -u NONE -i NONE -n --cmd "set runtimepath^=$TALK2TEXT_TEST_ROOT"'
+# shellcheck disable=SC2016 # Expanded by the configured hook shell.
+export TALK2TEXT_NVIM_TERMINAL_CMD='pwd > "$TALK2TEXT_TEST_CWD_LOG"; run_in_terminal() { "$@" +q; }; run_in_terminal'
 (
   cd "$test_dir"
   XDG_RUNTIME_DIR=$startup_base NVIM_LOG_FILE="$test_dir/startup-nvim.log" \
