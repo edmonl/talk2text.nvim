@@ -6,7 +6,7 @@ readonly TARGET_NAME="nvim-target"
 readonly DEFAULT_TARGET_NAME="default-nvim-target"
 readonly REMOTE_OK="talk2text-ok"
 
-readonly NOTIFY_CMD=${TALK2TEXT_NVIM_NOTIFY_CMD-'notify-send -t 5000 Talk2text "$@"'}
+readonly NOTIFY_CMD=${TALK2TEXT_NVIM_NOTIFY_CMD-'notify-send -a talk2text -u normal -t 5000 Talk2text "$@"'}
 readonly CLIENT_CMD=${TALK2TEXT_NVIM_CLIENT_CMD-'nvim "$@"'}
 readonly TERMINAL_CMD=${TALK2TEXT_NVIM_TERMINAL_CMD-}
 readonly FOCUS_CMD=${TALK2TEXT_NVIM_FOCUS_CMD-}
