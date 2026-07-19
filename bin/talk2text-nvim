@@ -163,10 +163,7 @@ start_default_editor() {
 
   encode_lua_bytes "$TRANSCRIPT_PATH"
   local startup="lua require(\"talk2text\")._default_start(\"$LUA_BYTES\")"
-  (
-    cd "$RUNTIME_DIR" || exit 1
-    run_hook "$TERMINAL_CMD" -c "$startup"
-  )
+  run_hook "$TERMINAL_CMD" -c "$startup"
 }
 
 handle_text() {

@@ -116,7 +116,7 @@ The output command is configured through environment variables:
 3. `TALK2TEXT_NVIM_FOCUS_CMD` focuses an existing default editor. It is empty by default and is best-effort.
 4. `TALK2TEXT_NVIM_NOTIFY_CMD` reports blank and short transcripts. Its default is `notify-send -t 5000 Talk2text "$@"` and is best-effort.
 
-Each non-empty value is trusted shell code executed with `sh -c`. Generated values are passed as positional arguments and are available through `"$@"`; do not interpolate runtime values into hook code. The terminal hook runs with the `talk2text` runtime directory as its working directory. The focus hook receives no generated arguments.
+Each non-empty value is trusted shell code executed with `sh -c`. Generated values are passed as positional arguments and are available through `"$@"`; do not interpolate runtime values into hook code. Hooks inherit the output command's working directory. The focus hook receives no generated arguments.
 
 ## Runtime Directory
 

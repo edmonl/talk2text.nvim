@@ -161,12 +161,18 @@ startup_base=$test_dir/xdg
 startup_runtime=$startup_base/talk2text
 mkdir -p "$startup_runtime/transcripts"
 startup_path=$startup_runtime/transcripts/default\ editor.txt
+startup_cwd_log=$test_dir/startup-cwd.log
 printf 'started by terminal hook' > "$startup_path"
 export TALK2TEXT_TEST_ROOT=$project_root
+export TALK2TEXT_TEST_CWD_LOG=$startup_cwd_log
 # shellcheck disable=SC2016 # Expanded by the configured hook shell.
-export TALK2TEXT_NVIM_TERMINAL_CMD='nvim --headless -u NONE -i NONE -n --cmd "set runtimepath^=$TALK2TEXT_TEST_ROOT" "$@" +qa!'
-XDG_RUNTIME_DIR=$startup_base NVIM_LOG_FILE="$test_dir/startup-nvim.log" \
-  "$project_root/bin/talk2text-nvim" text "$startup_path"
+export TALK2TEXT_NVIM_TERMINAL_CMD='pwd > "$TALK2TEXT_TEST_CWD_LOG"; nvim --headless -u NONE -i NONE -n --cmd "set runtimepath^=$TALK2TEXT_TEST_ROOT" "$@" +qa!'
+(
+  cd "$test_dir"
+  XDG_RUNTIME_DIR=$startup_base NVIM_LOG_FILE="$test_dir/startup-nvim.log" \
+    "$project_root/bin/talk2text-nvim" text "$startup_path"
+)
+[[ $(cat "$startup_cwd_log") == "$test_dir" ]] || fail "terminal hook did not inherit the output command working directory"
 [[ ! -e $startup_path ]] || fail "default editor startup retained transcript"
 [[ ! -e $startup_runtime/default-nvim-target ]] || fail "default editor quit retained target"
 
