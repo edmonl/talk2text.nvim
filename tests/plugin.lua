@@ -164,12 +164,13 @@ local function run()
 
   local punctuated_transcript = transcript_dir .. "/43.txt"
   write_file(punctuated_transcript, "done.")
-  assert_true(talk2text.load(43), "punctuated transcript append failed")
+  assert_true(talk2text.load(43), "punctuated transcript insertion failed")
   assert_equal(vim.api.nvim_get_current_line(), "alpha well-known beta done.", "punctuated transcript")
+  assert_equal(vim.api.nvim_win_get_cursor(0), { 1, 0 }, "cursor after punctuated transcript")
 
   local trailing_hyphen = transcript_dir .. "/44.txt"
   write_file(trailing_hyphen, "unfinished-")
-  assert_true(talk2text.load(44), "trailing-hyphen transcript append failed")
+  assert_true(talk2text.load(44), "trailing-hyphen transcript insertion failed")
   assert_equal(
     vim.api.nvim_get_current_line(),
     "alpha well-known beta done. unfinished-",
@@ -235,53 +236,29 @@ local function run()
   assert_true(exists(unexpected_failure), "unexpected load failure removed the transcript")
   assert(uv.fs_unlink(unexpected_failure))
 
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
-  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "before", "current   ", "after" })
+  vim.api.nvim_win_set_cursor(0, { 2, 3 })
   local first = transcript_dir .. "/1.txt"
-  write_file(first, "first\n\nthird\n")
+  write_file(first, "\nfirst\n\nthird\n")
   local first_ok, first_err = talk2text.load(1)
   assert_true(first_ok, "initial transcript load failed: " .. tostring(first_err))
-  assert_equal(vim.api.nvim_buf_get_lines(0, 0, -1, false), { "first", "", "third" }, "initial lines")
+  assert_equal(
+    vim.api.nvim_buf_get_lines(0, 0, -1, false),
+    { "before", "current first", "", "third", "after" },
+    "lines appended at current line"
+  )
+  assert_equal(vim.api.nvim_win_get_cursor(0), { 4, 0 }, "cursor at beginning of final inserted line")
   assert_true(not exists(first), "successful load did not remove its transcript")
 
-  local appended = transcript_dir .. "/2.txt"
-  write_file(appended, "  fourth item  \n")
-  assert_true(talk2text.load(2), "append failed")
+  local inserted = transcript_dir .. "/2.txt"
+  write_file(inserted, "  fourth item  \n")
+  assert_true(talk2text.load(2), "line insertion failed")
   assert_equal(
     vim.api.nvim_buf_get_lines(0, 0, -1, false),
-    { "first", "", "third fourth item" },
-    "appended lines"
+    { "before", "current first", "", "third fourth item", "after" },
+    "subsequent current-line append"
   )
-
-  vim.api.nvim_buf_set_lines(0, -2, -1, false, { "third fourth item " })
-  local single_space = transcript_dir .. "/30.txt"
-  write_file(single_space, "fifth item")
-  assert_true(talk2text.load(30), "single-space append failed")
-  assert_equal(
-    vim.api.nvim_buf_get_lines(0, 0, -1, false),
-    { "first", "", "third fourth item fifth item" },
-    "single trailing space"
-  )
-
-  local edge_blank_lines = transcript_dir .. "/3.txt"
-  vim.api.nvim_buf_set_lines(0, -2, -1, false, { "third fourth item fifth item   " })
-  write_file(edge_blank_lines, "\n  sixth item  \n\n")
-  assert_true(talk2text.load(3), "edge blank line trimming failed")
-  assert_equal(
-    vim.api.nvim_buf_get_lines(0, 0, -1, false),
-    { "first", "", "third fourth item fifth item sixth item" },
-    "multiple trailing spaces"
-  )
-
-  vim.api.nvim_buf_set_lines(0, -1, -1, false, { "" })
-  local empty_last_line = transcript_dir .. "/31.txt"
-  write_file(empty_last_line, "  seventh item  ")
-  assert_true(talk2text.load(31), "empty-last-line append failed")
-  assert_equal(
-    vim.api.nvim_buf_get_lines(0, 0, -1, false),
-    { "first", "", "third fourth item fifth item sixth item", "seventh item" },
-    "empty last line"
-  )
+  assert_equal(vim.api.nvim_win_get_cursor(0), { 4, 0 }, "cursor after single-line append")
 
   local empty = transcript_dir .. "/4.txt"
   write_file(empty, "")
@@ -328,8 +305,7 @@ local function run()
     "successful retry notification omitted its purpose"
   )
   assert_equal(retry_success_notifications[1][2], vim.log.levels.INFO, "successful retry notification level")
-  assert_equal(vim.api.nvim_buf_get_lines(0, -1, -1, false), {}, "invalid line range sanity check")
-  assert_equal(vim.api.nvim_buf_get_lines(0, -2, -1, false), { "seventh item retried text" }, "retried line")
+  assert_equal(vim.api.nvim_get_current_line(), "third fourth item retried text", "retried line")
 
   local blocked = transcript_dir .. "/6.txt"
   write_file(blocked, "blocked text")
@@ -351,11 +327,7 @@ local function run()
   assert_true(#blocked_retry_notifications == 1, "buffer retry did not notify exactly once")
   assert_true(blocked_retry_notifications[1][1]:match("6") ~= nil, "buffer retry notification omitted its ID")
   assert_equal(blocked_retry_notifications[1][2], vim.log.levels.INFO, "buffer retry notification level")
-  assert_equal(
-    vim.api.nvim_buf_get_lines(0, -2, -1, false),
-    { "seventh item retried text blocked text" },
-    "retried blocked line"
-  )
+  assert_equal(vim.api.nvim_get_current_line(), "third fourth item retried text blocked text", "retried blocked line")
   assert_true(talk2text.load(), "load without a remembered failure was not a no-op")
 
   local remote_blocked = transcript_dir .. "/7.txt"

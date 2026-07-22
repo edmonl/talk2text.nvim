@@ -57,25 +57,28 @@ local function read_transcript_file(path)
   return contents
 end
 
----Append text to the current buffer's last line.
+---Append text to the cursor's current line.
 ---@param text string
 ---@return true|nil ok
 ---@return boolean|string changed_or_err Whether the buffer changed, or the error on failure.
-local function append_text(text)
+local function append_text_at_cursor_line(text)
   local lines = vim.split(text, '\n', { plain = true, trimempty = true })
   if #lines == 0 then
     return true, false
   end
 
-  local last_line = vim.api.nvim_buf_get_lines(0, -2, -1, true)[1]
-  if last_line ~= '' then
-    lines[1] = last_line:gsub(' +$', '') .. ' ' .. lines[1]
+  -- Command-line startup can report row zero before the first buffer window is fully initialized.
+  local current_line = vim.api.nvim_get_current_line()
+  if current_line ~= '' then
+    lines[1] = current_line:gsub(' +$', '') .. ' ' .. lines[1]
   end
 
-  local ok, err = pcall(vim.api.nvim_buf_set_lines, 0, -2, -1, true, lines)
+  local row = math.max(vim.api.nvim_win_get_cursor(0)[1], 1)
+  local ok, err = pcall(vim.api.nvim_buf_set_lines, 0, row - 1, row, true, lines)
   if not ok then
-    return nil, err
+    return nil, tostring(err)
   end
+  pcall(vim.api.nvim_win_set_cursor, 0, { row + #lines - 1, 0 })
   return true, true
 end
 
@@ -113,7 +116,7 @@ local function insert_word_at_cursor(word)
 
   local ok, err = pcall(vim.api.nvim_set_current_line, prefix .. word .. suffix)
   if not ok then
-    return nil, err
+    return nil, tostring(err)
   end
   pcall(vim.api.nvim_win_set_cursor, 0, { cursor[1], #prefix })
   return true, true
@@ -145,24 +148,32 @@ local function servername()
   return nil, 'cannot start a server: ' .. tostring(result)
 end
 
+---Publish the current Neovim server as a target and register its exit cleanup.
+---@param filename string
+---@return true|nil ok
+---@return boolean|string changed_or_err Whether the target changed, or the error on failure.
 local function set_target_file(filename)
   local runtime_dir, runtime_err = get_runtime_dir()
   if not runtime_dir then
-    return nil, runtime_err
+    return nil, tostring(runtime_err)
   end
 
   local name, server_err = servername()
   if not name then
-    return nil, server_err
+    return nil, tostring(server_err)
   end
   local ok, changed_or_err = target.claim(runtime_dir, filename, name)
   if not ok then
     return nil, ('cannot write %s: %s'):format(filename, changed_or_err)
   end
   register_cleanup(runtime_dir, filename, name)
-  return true, changed_or_err
+  return true, changed_or_err == true
 end
 
+---Set a target file while converting unexpected Lua errors into returned errors.
+---@param filename string
+---@return true|nil ok
+---@return boolean|string changed_or_err Whether the target changed, or the error on failure.
 local function try_set_target(filename)
   local called, result, changed_or_err = pcall(set_target_file, filename)
   if not called then
@@ -271,7 +282,7 @@ local function load(id)
   if transcript ~= '' and not transcript:find('%s') and not transcript:match('%p$') then
     loaded, changed_or_err = insert_word_at_cursor(transcript)
   else
-    loaded, changed_or_err = append_text(transcript)
+    loaded, changed_or_err = append_text_at_cursor_line(transcript)
   end
   if not loaded then
     failed_id = id
@@ -318,8 +329,9 @@ end
 function M.set_target(id)
   local ok, changed_or_err = try_set_target('nvim-target')
   if not ok then
-    notify_error(changed_or_err)
-    return nil, changed_or_err
+    local err = tostring(changed_or_err)
+    notify_error(err)
+    return nil, err
   end
   if changed_or_err then
     notify('This Neovim is now the talk2text target', vim.log.levels.INFO)

@@ -15,13 +15,13 @@ Steps:
 3. Run `:lua require("talk2text").set_target()`.
 4. Create a transcript file such as `<runtime_dir>/transcripts/1.txt`.
 5. Run `talk2text-nvim text <path-to-transcript>`.
-6. Confirm the transcript text was appended to the Neovim buffer.
+6. Confirm the transcript text was appended to the cursor's current line.
 7. Confirm the transcript file no longer exists.
 
 State affected:
 
 1. `<runtime_dir>/nvim-target` may be written by the test.
-2. The current Neovim buffer receives appended text.
+2. The current Neovim buffer receives inserted text.
 3. The transcript file is removed.
 
 Cleanup:

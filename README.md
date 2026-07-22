@@ -4,7 +4,7 @@
 
 The project has two parts:
 
-1. A Neovim plugin that registers an editor as a transcript target and appends transcripts to the current buffer.
+1. A Neovim plugin that registers an editor as a transcript target and inserts transcripts into the current buffer.
 2. A `talk2text-nvim` command intended for `talk2text daemon -out-cmd`.
 
 Text is sent to an explicitly selected Neovim instance when one is available. Otherwise, it can reuse or start a dedicated default editor. Target files are updated and cleaned up under a shared runtime-directory lock so participating Neovim instances and output commands do not remove one another's targets.
@@ -27,7 +27,7 @@ Start `talk2text` with the integration as its output command:
 talk2text daemon -out-cmd talk2text-nvim
 ```
 
-The daemon creates the runtime directory required by the integration. In Neovim, press the configured mapping before recording. Completed text transcripts are appended to the current buffer and removed after a successful load.
+The daemon creates the runtime directory required by the integration. In Neovim, press the configured mapping before recording. Completed text transcripts are appended to the cursor's current line and removed after a successful load.
 
 No keymap is defined by default. With the example mapping, a positive Vim count also loads that transcript ID; no count selects the editor and retries a previously failed load if one exists. You can also select the current instance directly:
 
@@ -101,7 +101,7 @@ For each text transcript, `talk2text-nvim` tries targets in this order:
 2. An existing `default-nvim-target`.
 3. A newly started default editor.
 
-Missing targets are skipped. Empty and unreachable target files are cleaned up before the command continues to the next choice. A reachable target whose transcript load fails is not treated as stale; delivery stops so the same transcript is not appended twice.
+Missing targets are skipped. Empty and unreachable target files are cleaned up before the command continues to the next choice. A reachable target whose transcript load fails is not treated as stale; delivery stops so the same transcript is not inserted twice.
 
 A `short` transcript acts as a shortcut to remove the explicit target. Future text then goes to the default editor. A `blank` transcript does not change either target.
 
@@ -158,7 +158,7 @@ The public module provides:
 3. `load(id)` to load `<runtime_dir>/transcripts/<id>.txt` into the current buffer and remove it after success.
 4. `load()`, `load(nil)`, or `load(0)` to retry the most recent failed ID remembered by the current Neovim session.
 
-Lua API IDs must be integers from 1 through 9007199254740991 when supplied explicitly. `load(id)` trims leading and trailing transcript whitespace. A transcript with no whitespace and no punctuation at its end is inserted relative to the cursor: it does not split the current whitespace-delimited word, it is placed before trailing punctuation under the cursor, and it is delimited from surrounding text while preserving existing prefix whitespace. The cursor then moves to the beginning of the inserted word. Other transcripts are appended to the buffer's last line, preserving interior blank lines. The first runtime directory resolved by the plugin remains fixed for the Neovim session; repeated `setup()` calls for the same directory are no-ops, while attempts to switch it fail. `setup(opts)`, `set_target(id)`, and `load(id)` return `true` on success or `nil, err` on failure. Failures emit one error notification inside the affected Neovim instance without raising another error, including failures received through remote delivery. Transcript-loading notifications include the ID, and a successful retry emits an informational notification with the retried ID. A successful actual target switch emits an informational notification; selecting an already-current target does not.
+Lua API IDs must be integers from 1 through 9007199254740991 when supplied explicitly. `load(id)` trims leading and trailing transcript whitespace. A transcript with no whitespace and no punctuation at its end is inserted relative to the cursor: it does not split the current whitespace-delimited word, it is placed before trailing punctuation under the cursor, and it is delimited from surrounding text while preserving existing prefix whitespace. The cursor then moves to the beginning of the inserted word. Other transcripts are appended to the cursor's current line, preserving interior blank lines; the cursor moves to the beginning of the final resulting line. The first runtime directory resolved by the plugin remains fixed for the Neovim session; repeated `setup()` calls for the same directory are no-ops, while attempts to switch it fail. `setup(opts)`, `set_target(id)`, and `load(id)` return `true` on success or `nil, err` on failure. Failures emit one error notification inside the affected Neovim instance without raising another error, including failures received through remote delivery. Transcript-loading notifications include the ID, and a successful retry emits an informational notification with the retried ID. A successful actual target switch emits an informational notification; selecting an already-current target does not.
 
 ## Troubleshooting
 

@@ -66,14 +66,14 @@ Behavior:
 7. Insertion happens before trailing punctuation under the cursor. Punctuation is trailing when only punctuation appears between the cursor and the next whitespace or end of line; punctuation followed by more non-whitespace text remains part of the current word, as in `it's`.
 8. When surrounding text exists, the inserted word is preceded by existing whitespace or at least one added space and followed by at least one whitespace character or punctuation. Existing whitespace before the cursor is preserved.
 9. After single-word insertion, the plugin attempts to move the cursor to the beginning of the inserted word. Failure to move the cursor does not fail an otherwise successful load.
-10. Other non-empty transcripts are appended to the buffer's last line. An empty last line is replaced directly; otherwise, trailing spaces are normalized and exactly one space separates the existing line from the transcript's first line. Remaining transcript lines are appended as separate lines, preserving interior blank lines.
+10. Other non-empty transcripts are appended to the cursor's current line. An empty current line is replaced directly; otherwise, trailing spaces are normalized and exactly one space separates the existing line from the transcript's first line. Remaining transcript lines are inserted below it, preserving interior blank lines. The cursor then moves to the beginning of the final resulting line.
 11. It removes the source file only after the load or no-op succeeds.
 12. Returns `true` on a successful load or no-op.
 13. Returns `nil, err` on expected failure.
 14. On failure, emits one error notification inside Neovim and returns `nil, err` without raising another error. Transcript-specific notifications include the ID. This applies equally to direct Lua calls, remote command delivery, and default-editor startup.
 15. After a remembered failed ID is retried and loaded successfully, emits an informational notification that includes the ID. A retry with no remembered ID remains a silent successful no-op.
 
-The plugin remembers one failed ID in memory for the current Neovim session. A failed explicit load replaces the remembered ID, a failed retry keeps it, and any successful load clears it. A failed load does not partially change the buffer. If removing the source file fails after text was appended, the plugin returns `nil, err` without remembering a retry, because retrying could append the same transcript twice.
+The plugin remembers one failed ID in memory for the current Neovim session. A failed explicit load replaces the remembered ID, a failed retry keeps it, and any successful load clears it. A failed load does not partially change the buffer. If removing the source file fails after text was inserted, the plugin returns `nil, err` without remembering a retry, because retrying could insert the same transcript twice.
 
 # Default Editor Startup
 
