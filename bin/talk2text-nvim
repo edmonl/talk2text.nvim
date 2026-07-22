@@ -4,23 +4,22 @@ export LC_ALL=C
 
 readonly TARGET_NAME="nvim-target"
 readonly DEFAULT_TARGET_NAME="default-nvim-target"
-readonly REMOTE_OK="talk2text-ok"
+readonly REMOTE_OK="ok"
 
 readonly NOTIFY_CMD=${TALK2TEXT_NVIM_NOTIFY_CMD-'notify-send -a talk2text -u normal -t 5000 Talk2text'}
 readonly NVIM_CMD=${TALK2TEXT_NVIM_CMD-nvim}
-readonly TERMINAL_CMD=${TALK2TEXT_NVIM_TERMINAL_CMD-}
+readonly LAUNCH_CMD=${TALK2TEXT_NVIM_LAUNCH_CMD-}
 readonly FOCUS_CMD=${TALK2TEXT_NVIM_FOCUS_CMD-}
 
 RUNTIME_DIR=
 TRANSCRIPT_PATH=
+TRANSCRIPT_ID=
 
 # Outputs set by read_target_locked for its caller.
 TARGET_EXISTS=0
 TARGET_VALUE=
 # File descriptor held while the runtime directory is locked.
 RUNTIME_LOCK_FD=
-# Escaped path bytes produced by encode_lua_bytes.
-LUA_BYTES=
 
 fail() {
   printf 'talk2text-nvim: %s\n' "$*" >&2
@@ -109,18 +108,6 @@ delete_target_if_unchanged() {
   unlock_runtime
 }
 
-encode_lua_bytes() {
-  local input="$1"
-  local output=
-  local byte escaped i
-  for ((i = 0; i < ${#input}; i++)); do
-    printf -v byte '%d' "'${input:i:1}"
-    printf -v escaped '\\%03d' "$byte"
-    output+="$escaped"
-  done
-  LUA_BYTES="$output"
-}
-
 probe_server() {
   local socket="$1"
   run_nvim --server "$socket" --remote-expr 1 2>/dev/null
@@ -128,8 +115,7 @@ probe_server() {
 
 load_in_server() {
   local socket="$1"
-  encode_lua_bytes "$TRANSCRIPT_PATH"
-  local expression="luaeval('require(\"talk2text\")._remote_load(\"$LUA_BYTES\")')"
+  local expression="luaeval('require(\"talk2text\")._remote_load($TRANSCRIPT_ID)')"
   local response
   response=$(run_nvim --server "$socket" --remote-expr "$expression") || return 1
   [[ $response == "$REMOTE_OK" ]]
@@ -160,14 +146,13 @@ try_target() {
 }
 
 start_default_editor() {
-  if [[ -z $TERMINAL_CMD ]]; then
-    fail "TALK2TEXT_NVIM_TERMINAL_CMD is required to start a default editor"
-    return 1
+  local command=$NVIM_CMD
+  if [[ -n $LAUNCH_CMD ]]; then
+    command="$LAUNCH_CMD $NVIM_CMD"
   fi
 
-  encode_lua_bytes "$TRANSCRIPT_PATH"
-  local startup="lua require(\"talk2text\")._default_start(\"$LUA_BYTES\")"
-  run_hook "$TERMINAL_CMD $NVIM_CMD" -c "$startup"
+  local startup="lua require(\"talk2text\")._default_start($TRANSCRIPT_ID)"
+  run_hook "$command" -c "$startup"
 }
 
 handle_text() {
@@ -241,6 +226,15 @@ set_runtime_dir() {
   fi
 }
 
+set_transcript_id() {
+  local filename=${TRANSCRIPT_PATH##*/}
+  if [[ ! $filename =~ ^([1-9][0-9]*)\.txt$ ]]; then
+    fail "transcript filename must be <positive-id>.txt"
+    return 1
+  fi
+  TRANSCRIPT_ID=${BASH_REMATCH[1]}
+}
+
 main() {
   if (($# != 2)); then
     fail "usage: talk2text-nvim <text|blank|short> <path>"
@@ -255,6 +249,7 @@ main() {
   fi
 
   set_runtime_dir || return 1
+  set_transcript_id || return 1
   case "$kind" in
     text) handle_text ;;
     blank) handle_blank ;;

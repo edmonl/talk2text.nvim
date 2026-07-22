@@ -8,7 +8,7 @@ Supersedes [0001](0001-defer-output-command-startup-timeouts.md)
 
 ## Context
 
-`talk2text` leaves transcript cleanup to its output command and permits that command to delegate processing. A terminal-started Neovim can outlive the command that invokes it, so terminal process completion cannot prove that the initial transcript was loaded.
+`talk2text` leaves transcript cleanup to its output command and permits that command to delegate processing. A newly started Neovim instance can outlive the command that invokes it, so launch-command completion cannot prove that the initial transcript was loaded.
 
 ## Decision
 
@@ -16,7 +16,7 @@ For a newly started default editor, delegate transcript loading and cleanup to t
 
 ## Consequences
 
-+ Terminal hooks can be interactive or long-running without becoming a delivery-coordination protocol.
++ A configured launch command can be interactive or long-running without becoming a delivery-coordination protocol.
 + The transcript remains available until Neovim consumes it.
 + Failed initial loads retain the transcript for retry or daemon startup cleanup.
 - Initial-load errors are reported by Neovim rather than returned to the invoking command.

@@ -16,19 +16,21 @@ Detailed component specs:
 
 # Runtime Model
 
-`talk2text` owns the runtime directory. This project uses the same runtime directory discovery rules as `talk2text`:
+`talk2text` owns the runtime directory. The plugin checks the same runtime directory candidates as `talk2text`, in this order:
 
 1. `$XDG_RUNTIME_DIR/talk2text` when `XDG_RUNTIME_DIR` is set.
-2. Otherwise `$TMPDIR/run-<uid>/talk2text` when `TMPDIR` is set.
-3. Otherwise `/tmp/run-<uid>/talk2text`.
+2. `$TMPDIR/run-<uid>/talk2text` when `TMPDIR` is set.
+3. `/tmp/run-<uid>/talk2text`.
 
-The plugin may also be configured with an explicit runtime directory.
+During automatic discovery, a missing candidate is skipped and the next candidate is checked. The first existing directory is selected. An existing candidate that is not a directory, or a candidate that cannot be inspected for a reason other than being absent, is an error and stops discovery. The plugin caches the first successfully resolved directory for the Neovim session; a failed resolution is not cached and may be retried. The plugin may instead be configured with an explicit runtime directory; an explicit path is validated directly, cached after successful setup, and never falls back to another candidate.
 
-For every kind, the command validates the literal transcript path it receives from `talk2text`. The path must be absolute and its immediate parent directory must be `transcripts`; that directory's parent is the runtime directory. The inferred runtime directory must not be the filesystem root. The command does not resolve symlinks or normalize path components. `text` requires a readable regular file. `blank` and `short` also accept an already-absent file: they have no transcript content to read, and cleanup is complete once the file is absent. Any other path shape is an error.
+For every kind, the command validates the literal transcript path it receives from `talk2text`. The path must be absolute, its immediate parent directory must be `transcripts`, and its filename must be the canonical form `<positive-id>.txt`; that directory's parent is the runtime directory. The inferred runtime directory must not be the filesystem root. The command does not resolve symlinks or normalize path components. `text` requires a readable regular file. `blank` and `short` also accept an already-absent file: they have no transcript content to read, and cleanup is complete once the file is absent. Any other path shape is an error.
+
+The plugin resolves transcript IDs relative to its configured or discovered runtime directory. The command passes only the derived ID to the plugin's internal adapters. The project assumes a user runs one daemon under the default runtime resolution; supporting multiple same-user daemons under that same default is outside the expected runtime model. Tests provide the runtime directory explicitly.
 
 As `talk2text`'s output command, this project owns cleanup of the supplied transcript file. For `text`, it removes the file only after successful handling and otherwise leaves it for `talk2text`'s next startup cleanup. For `blank` and `short`, it attempts to remove the file before other kind-specific handling. Cleanup failure is reported but does not interrupt that handling or by itself make the command fail.
 
-Neither the plugin nor the command creates the runtime directory. If the runtime directory is missing, invalid, or unavailable, that is an error. The `talk2text` daemon is expected to create and own the runtime directory before this integration is used.
+Neither the plugin nor the command creates the runtime directory. A missing explicit runtime directory, no existing automatic-discovery candidate, or an invalid or unavailable candidate is an error. The `talk2text` daemon is expected to create and own the runtime directory before this integration is used.
 
 # Target Files
 
