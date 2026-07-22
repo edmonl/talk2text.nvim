@@ -4,6 +4,7 @@ local uv = vim.uv
 
 local M = {}
 local config = { runtime_dir = nil }
+local max_transcript_id = 9007199254740991 -- Maximum safe integer for LuaJIT numbers.
 local failed_id -- Last explicitly requested transcript ID that failed, for retry.
 local cleanup_servers = {} -- Target filenames mapped to servers with registered exit cleanup.
 
@@ -232,7 +233,7 @@ function M.setup(opts)
 end
 
 ---Load a transcript by ID, or retry the last failed ID.
----@param id any A positive integer, nil, or zero; other values produce a validation failure.
+---@param id any A positive safe integer, nil, or zero; other values produce a validation failure.
 ---@return true|nil ok
 ---@return string|nil err
 ---@return any reported_id The failed or successfully retried ID to report; nil otherwise.
@@ -248,8 +249,8 @@ local function load(id)
       return true
     end
     retried_id = id
-  elseif type(id) ~= 'number' or id ~= math.floor(id) or id < 1 then
-    return nil, 'transcript ID must be a positive integer', id
+  elseif type(id) ~= 'number' or id ~= math.floor(id) or id < 1 or id > max_transcript_id then
+    return nil, ('transcript ID must be a positive and safe integer'), id
   end
 
   local runtime_dir, runtime_err = get_runtime_dir()

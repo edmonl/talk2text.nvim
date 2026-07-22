@@ -290,6 +290,25 @@ local function run()
   assert_equal(vim.api.nvim_buf_get_lines(0, 0, -1, false), before_empty, "empty transcript changed the buffer")
   assert_true(not exists(empty), "empty transcript was not removed")
 
+  local max_transcript_id = 9007199254740991
+  local max_id_path = transcript_dir .. "/" .. string.format("%d", max_transcript_id) .. ".txt"
+  write_file(max_id_path, "")
+  assert_true(talk2text.load(max_transcript_id), "maximum safe transcript ID was rejected")
+  assert_true(not exists(max_id_path), "maximum safe transcript was retained")
+
+  for _, invalid_id in ipairs({ 9007199254740992, math.huge }) do
+    local invalid_id_notifications, invalid_id_ok, invalid_id_err = capture_notifications(function()
+      return talk2text.load(invalid_id)
+    end)
+    assert_true(not invalid_id_ok, "unsafe transcript ID unexpectedly loaded")
+    assert_true(
+      invalid_id_err:match("positive and safe integer") ~= nil,
+      "unsafe transcript ID omitted the valid range"
+    )
+    assert_equal(#invalid_id_notifications, 1, "unsafe transcript ID did not notify exactly once")
+    assert_equal(invalid_id_notifications[1][2], vim.log.levels.ERROR, "unsafe transcript ID notification level")
+  end
+
   local retry = transcript_dir .. "/5.txt"
   local retry_notifications, retry_ok = capture_notifications(function()
     return talk2text.load(5)

@@ -57,9 +57,9 @@ Loads a transcript into the current buffer by its runtime-scoped clip ID.
 
 Behavior:
 
-1. A positive integer `id` reads `<runtime_dir>/transcripts/<id>.txt` using the runtime configured by `setup()` or the normal discovery rules.
+1. An integer `id` from 1 through 9007199254740991 reads `<runtime_dir>/transcripts/<id>.txt` using the runtime configured by `setup()` or the normal discovery rules. The upper bound is LuaJIT's maximum safe integer.
 2. `load()`, `load(nil)`, and `load(0)` retry the remembered failed ID. If no ID is remembered, they are successful no-ops.
-3. A negative, fractional, or nonnumeric ID is invalid. It emits an error notification that includes the supplied ID and returns `nil, err`.
+3. An ID outside the supported range, a fractional ID, or a nonnumeric ID is invalid. It emits an error notification that includes the supplied ID and returns `nil, err`.
 4. Leading and trailing transcript whitespace is discarded. An empty transcript is a no-op.
 5. A non-empty transcript is treated as a single word when it contains no whitespace and its final character does not match the Lua punctuation class `%p`. Internal punctuation is allowed, so `well-known` is a word but `unfinished-` is not.
 6. A single-word transcript is inserted on the cursor's current line without splitting the current whitespace-delimited word. If the cursor is within a word, insertion happens after the whole word.
