@@ -192,16 +192,23 @@ end
 local function setup(opts)
   opts = opts or {}
   if type(opts) ~= 'table' then
-    return nil, 'talk2text.setup expects a table'
+    return nil, 'setup expects a table'
   end
   for key in pairs(opts) do
     if key ~= 'runtime_dir' then
-      return nil, 'unknown talk2text option: ' .. tostring(key)
+      return nil, 'unknown option: ' .. tostring(key)
     end
   end
   local runtime_dir, runtime_err = runtime.resolve(opts.runtime_dir)
   if not runtime_dir then
     return nil, runtime_err
+  end
+  if config.runtime_dir == runtime_dir then
+    return true
+  end
+  if config.runtime_dir ~= nil then
+    return nil, ('cannot change already resolved runtime directory %s to %s')
+      :format(config.runtime_dir, runtime_dir)
   end
   local daemon_ok, daemon_err = runtime.check_daemon(runtime_dir)
   if not daemon_ok then

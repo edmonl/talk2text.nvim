@@ -93,7 +93,48 @@ local function run()
   vim.env.XDG_RUNTIME_DIR = original_xdg_runtime_dir
   vim.env.TMPDIR = original_tmpdir
 
-  talk2text.setup({ runtime_dir = runtime_dir })
+  local _, published_target_ok = capture_notifications(function()
+    return talk2text.set_target(0)
+  end)
+  assert_true(published_target_ok, "could not publish the lazy runtime target")
+  local switched_runtime_notifications, switched_runtime_ok, switched_runtime_err = capture_notifications(function()
+    return talk2text.setup({ runtime_dir = runtime_dir })
+  end)
+  assert_true(not switched_runtime_ok, "setup changed an already-selected runtime")
+  assert_true(switched_runtime_err:match("cannot change") ~= nil, "runtime change result omitted the cause")
+  assert_equal(#switched_runtime_notifications, 1, "runtime change did not notify exactly once")
+  assert_true(
+    exists(fallback_runtime .. "/nvim-target"),
+    "rejected runtime change removed the published target"
+  )
+
+  package.loaded["talk2text"] = nil
+  talk2text = require("talk2text")
+
+  local offline_runtime = root .. "/offline-runtime"
+  vim.fn.mkdir(offline_runtime, "p", 448)
+  local daemon_notifications, daemon_ok, daemon_err = capture_notifications(function()
+    return talk2text.setup({ runtime_dir = offline_runtime })
+  end)
+  assert_true(not daemon_ok, "setup accepted a runtime without a live daemon")
+  assert_true(daemon_err:match("daemon") ~= nil, "unavailable daemon result omitted the cause")
+  assert_true(#daemon_notifications == 1, "unavailable daemon setup did not notify exactly once")
+  assert_true(daemon_notifications[1][1]:match("daemon") ~= nil, "daemon notification omitted the cause")
+
+  assert_true(talk2text.setup({ runtime_dir = runtime_dir }), "initial explicit setup failed")
+  local daemon_checks = 0
+  local original_check_daemon = runtime.check_daemon
+  runtime.check_daemon = function()
+    daemon_checks = daemon_checks + 1
+    return nil, "unexpected daemon check"
+  end
+  local repeated_setup_notifications, repeated_setup_ok = capture_notifications(function()
+    return talk2text.setup({ runtime_dir = runtime_dir })
+  end)
+  runtime.check_daemon = original_check_daemon
+  assert_true(repeated_setup_ok, "setup rejected the selected runtime")
+  assert_equal(daemon_checks, 0, "repeated setup checked the daemon again")
+  assert_equal(#repeated_setup_notifications, 0, "repeated setup emitted a notification")
 
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { "hello, world", "tail" })
   vim.api.nvim_win_set_cursor(0, { 1, 2 })
@@ -333,16 +374,6 @@ local function run()
   assert_true(#missing_notifications == 1, "missing runtime setup did not notify exactly once")
   assert_true(missing_notifications[1][1]:match("runtime directory") ~= nil, "runtime notification omitted the cause")
 
-  local offline_runtime = root .. "/offline-runtime"
-  vim.fn.mkdir(offline_runtime, "p", 448)
-  local daemon_notifications, daemon_ok, daemon_err = capture_notifications(function()
-    return talk2text.setup({ runtime_dir = offline_runtime })
-  end)
-  assert_true(not daemon_ok, "setup accepted a runtime without a live daemon")
-  assert_true(daemon_err:match("daemon") ~= nil, "unavailable daemon result omitted the cause")
-  assert_true(#daemon_notifications == 1, "unavailable daemon setup did not notify exactly once")
-  assert_true(daemon_notifications[1][1]:match("daemon") ~= nil, "daemon notification omitted the cause")
-
   local target_notifications, target_ok, target_err = capture_notifications(function()
     return talk2text.set_target(0)
   end)
@@ -399,7 +430,33 @@ local function run()
   assert_true(not vim.bo.modified, "default editor transcript buffer was modified")
   local mapping = vim.fn.maparg("qq", "n", false, true)
   assert_true(type(mapping) == "table" and mapping.buffer == 1, "default editor mapping is not buffer-local")
+  assert_true(type(mapping.callback) == "function", "default editor mapping has no Lua callback")
   assert(uv.fs_rmdir(runtime_dir .. "/default-nvim-target"))
+
+  local transcript_buffer = vim.api.nvim_get_current_buf()
+  local transcript_window = vim.api.nvim_get_current_win()
+  vim.cmd("vnew")
+  local normal_buffer = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(normal_buffer, 0, -1, false, { "modified normal buffer" })
+  assert_true(vim.bo[normal_buffer].modified, "normal buffer was not modified for mapping test")
+  vim.api.nvim_set_current_win(transcript_window)
+
+  local copied_lines
+  local original_setreg = vim.fn.setreg
+  vim.fn.setreg = function(register, lines, register_type)
+    assert_equal(register, "+", "default editor mapping register")
+    assert_equal(register_type, "l", "default editor mapping register type")
+    copied_lines = lines
+    return 0
+  end
+  local mapping_ok, mapping_err = pcall(mapping.callback)
+  vim.fn.setreg = original_setreg
+
+  assert_true(mapping_ok, "default editor mapping failed: " .. tostring(mapping_err))
+  assert_equal(copied_lines, { "startup still loads" }, "default editor mapping clipboard content")
+  assert_true(not vim.api.nvim_buf_is_valid(transcript_buffer), "closed transcript buffer was not wiped")
+  assert_equal(vim.api.nvim_get_current_buf(), normal_buffer, "default editor mapping closed another buffer")
+  assert_true(vim.bo[normal_buffer].modified, "default editor mapping discarded another modified buffer")
 
   io.stdout:write("plugin tests passed\n")
   io.stdout:flush()

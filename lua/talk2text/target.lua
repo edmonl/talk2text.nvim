@@ -72,18 +72,6 @@ local function atomic_write(path, contents)
   return true
 end
 
----Write a Neovim server address to a target file under the shared lock.
----@param runtime_dir string
----@param filename string
----@param servername string
----@return boolean|nil ok
----@return string|nil err
-function M.write(runtime_dir, filename, servername)
-  return runtime.with_lock(runtime_dir, function()
-    return atomic_write(runtime_dir .. '/' .. filename, servername .. '\n')
-  end)
-end
-
 ---Make a Neovim server the target and report whether the target changed.
 ---@param runtime_dir string
 ---@param filename string

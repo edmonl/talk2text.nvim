@@ -24,7 +24,7 @@ require("talk2text").setup({
 })
 ```
 
-`setup()` resolves and validates the runtime directory, then confirms that `<runtime_dir>/daemon.sock` accepts a connection. It does not perform a daemon status request. On failure, it emits one error notification inside Neovim and returns `nil, err` without raising another error. Calling `setup()` does not make the current Neovim instance the target. Plugin configuration comes from the user's normal Neovim configuration; the output command does not call `setup()`.
+`setup()` resolves and validates the runtime directory, then confirms that `<runtime_dir>/daemon.sock` accepts a connection. It does not perform a daemon status request. The first runtime directory successfully resolved by `setup()`, `set_target()`, or `load()` remains fixed for the Neovim session. A later `setup()` call for the same directory succeeds without checking the daemon again, but it cannot switch to another directory. On failure, `setup()` emits one error notification inside Neovim and returns `nil, err` without raising another error. Calling `setup()` does not make the current Neovim instance the target. Plugin configuration comes from the user's normal Neovim configuration; the output command does not call `setup()`.
 
 # `set_target([id])`
 
