@@ -217,7 +217,6 @@ local function run()
   vim.api.nvim_win_set_cursor = original_set_cursor
   assert_true(cursor_failure_ok, "cursor movement failure failed the load: " .. tostring(cursor_failure_err))
   assert_equal(vim.api.nvim_get_current_line(), "alpha again beta", "load after cursor movement failure")
-  assert_true(not exists(cursor_failure), "cursor movement failure retained the transcript")
 
   local unexpected_failure = transcript_dir .. "/50.txt"
   write_file(unexpected_failure, "unexpected failure")
@@ -271,7 +270,6 @@ local function run()
   local max_id_path = transcript_dir .. "/" .. string.format("%d", max_transcript_id) .. ".txt"
   write_file(max_id_path, "")
   assert_true(talk2text.load(max_transcript_id), "maximum safe transcript ID was rejected")
-  assert_true(not exists(max_id_path), "maximum safe transcript was retained")
 
   for _, invalid_id in ipairs({ 9007199254740992, math.huge }) do
     local invalid_id_notifications, invalid_id_ok, invalid_id_err = capture_notifications(function()

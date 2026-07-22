@@ -46,7 +46,7 @@ The supported environment is:
 3. The `talk2text` daemon.
 4. A POSIX `sh` for configurable command hooks.
 
-The Bash output command additionally requires Bash 4 or newer and the `flock` command, normally provided by `util-linux`. Building the Go output command requires Go 1.22 or newer; the resulting binary performs target locking and Neovim RPC directly.
+Building the output command requires Go 1.26 or newer. The resulting binary performs target locking and Neovim RPC directly.
 
 The default editor command invokes `nvim`, so it must be on `PATH` when a new editor needs to be started. Desktop notifications use `notify-send` by default but are best-effort and optional.
 
@@ -74,22 +74,16 @@ Run that command from the repository root.
 
 ### Install the Output Command
 
-The existing Bash implementation can be installed directly:
-
-```sh
-install -Dm755 bin/talk2text-nvim ~/.local/bin/talk2text-nvim
-```
-
-Alternatively, build and install the Go implementation from the project root:
+Build and install the output command from the project root:
 
 ```sh
 mkdir -p ~/.local/bin
 go build -o ~/.local/bin/talk2text-nvim .
 ```
 
-The Go implementation connects to existing targets through Neovim's MessagePack-RPC socket without starting a separate `nvim` client. It starts notification and focus hooks as detached subprocesses. For new-editor startup, it replaces itself with the configured shell command so that command's exit status propagates to the caller. The Bash implementation remains in `bin/` as a reference and fallback.
+The output command connects to existing targets through Neovim's MessagePack-RPC socket without starting a separate `nvim` client. It starts notification and focus hooks as detached subprocesses. For new-editor startup, it replaces itself with the configured shell command so that command's exit status propagates to the caller.
 
-Make sure `~/.local/bin` is on `PATH`, or pass the full command path to `talk2text daemon -out-cmd`. Reinstall or rebuild the selected implementation after updating the checkout.
+Make sure `~/.local/bin` is on `PATH`, or pass the full command path to `talk2text daemon -out-cmd`. Rebuild and reinstall the command after updating the checkout.
 
 ## Target Selection
 
@@ -117,12 +111,12 @@ When an existing default editor is reused, an optional focus hook can bring its 
 
 The output command is configured through environment variables:
 
-1. `TALK2TEXT_NVIM_CMD` controls Neovim server probes and remote loads in the Bash implementation, and the Neovim process used for default-editor startup in both implementations. The Go implementation performs existing-target probes and loads directly over MessagePack-RPC. Its default is `nvim`.
+1. `TALK2TEXT_NVIM_CMD` controls the Neovim process used for default-editor startup. Existing-target probes and loads use MessagePack-RPC directly. Its default is `nvim`.
 2. `TALK2TEXT_NVIM_LAUNCH_CMD` optionally starts a default editor through a launch command. It is empty by default. When set, the Neovim command and generated arguments are appended to it; when unset, the Neovim command is invoked directly.
 3. `TALK2TEXT_NVIM_FOCUS_CMD` focuses an existing default editor. It is empty by default and is best-effort.
 4. `TALK2TEXT_NVIM_NOTIFY_CMD` reports blank and short transcripts. Its default is `notify-send -a talk2text -u normal -t 5000 Talk2text` and is best-effort.
 
-Each non-empty value is trusted shell code executed with `sh -c`. Generated arguments are appended internally, so command settings do not include `"$@"`. Runtime values are passed as shell positional parameters and are never interpolated into hook code. Hooks inherit the output command's environment and working directory. Integrations are responsible for providing any environment required by configured hooks. The focus hook receives no generated arguments. The Go implementation writes detached notification and focus hook startup errors and hook stderr to the output command's stderr without changing its exit status.
+Each non-empty value is trusted shell code executed with `sh -c`. Generated arguments are appended internally, so command settings do not include `"$@"`. Runtime values are passed as shell positional parameters and are never interpolated into hook code. Hooks inherit the output command's environment and working directory. Integrations are responsible for providing any environment required by configured hooks. The focus hook receives no generated arguments. The output command writes detached notification and focus hook startup errors and hook stderr to its stderr without changing its exit status.
 
 ## Runtime Directory
 
@@ -176,7 +170,7 @@ More detailed behavior is documented in [docs/spec.md](docs/spec.md).
 Run the test suite from the repository root:
 
 ```sh
-tests/run.sh
+go test ./...
 ```
 
 The tests start local headless Neovim servers and create temporary Unix sockets under `/tmp`.

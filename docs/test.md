@@ -1,9 +1,9 @@
 # Smoke Test
 
-The automated suite builds the Go implementation in a temporary directory and runs the command scenarios against both it and `bin/talk2text-nvim`:
+The automated suite runs the Go unit tests, builds the output command in a temporary directory, runs the Lua plugin tests in headless Neovim, and exercises the command against a real Neovim RPC server:
 
 ```sh
-tests/run.sh
+go test ./...
 ```
 
 Goal: confirm that a transcript can be loaded into a Neovim target and removed after successful delivery.

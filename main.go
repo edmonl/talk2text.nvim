@@ -285,13 +285,18 @@ func (c *command) withRuntimeLock(fn func() error) error {
 }
 
 func (c *command) startDefaultEditor() error {
+	command, args := c.defaultEditorInvocation()
+	return execShellCommand(command, args...)
+}
+
+func (c *command) defaultEditorInvocation() (string, []string) {
 	command := c.nvimCmd
 	if c.launchCmd != "" {
 		command = c.launchCmd + " " + c.nvimCmd
 	}
 
 	startup := fmt.Sprintf(`lua require("talk2text")._default_start(%d)`, c.transcriptID)
-	return execShellCommand(command, "-c", startup)
+	return command, []string{"-c", startup}
 }
 
 func (c *command) handleBlank() {

@@ -56,16 +56,116 @@ func TestTranscriptIDRejectsMalformedNames(t *testing.T) {
 	}
 }
 
-func TestRemoveNonDirectoryDoesNotRemoveDirectory(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "transcript")
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		t.Fatal(err)
+func TestHandleBlank(t *testing.T) {
+	t.Run("removes transcript", func(t *testing.T) {
+		transcript := filepath.Join(t.TempDir(), "transcript.txt")
+		if err := os.WriteFile(transcript, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		(&command{transcript: transcript}).handleBlank()
+		if _, err := os.Lstat(transcript); !os.IsNotExist(err) {
+			t.Fatalf("blank transcript was not removed: %v", err)
+		}
+	})
+
+	t.Run("cleanup is best effort", func(t *testing.T) {
+		transcript := filepath.Join(t.TempDir(), "transcript.txt")
+		if err := os.Mkdir(transcript, 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		stderr := captureStderr(t, func() {
+			(&command{transcript: transcript}).handleBlank()
+		})
+		if !strings.Contains(stderr, "cannot remove transcript") {
+			t.Fatalf("stderr = %q, want transcript cleanup failure", stderr)
+		}
+		if info, err := os.Stat(transcript); err != nil || !info.IsDir() {
+			t.Fatalf("transcript directory was removed or changed: %v", err)
+		}
+	})
+}
+
+func TestHandleShort(t *testing.T) {
+	t.Run("removes transcript and explicit target", func(t *testing.T) {
+		runtimeDir := t.TempDir()
+		transcript := filepath.Join(runtimeDir, "transcript.txt")
+		target := filepath.Join(runtimeDir, targetName)
+		defaultTarget := filepath.Join(runtimeDir, defaultTargetName)
+		for _, path := range []string{transcript, target, defaultTarget} {
+			if err := os.WriteFile(path, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if err := (&command{runtimeDir: runtimeDir, transcript: transcript}).handleShort(); err != nil {
+			t.Fatalf("handleShort() error = %v", err)
+		}
+		if _, err := os.Lstat(target); !os.IsNotExist(err) {
+			t.Fatalf("explicit target was not removed: %v", err)
+		}
+		if _, err := os.Stat(defaultTarget); err != nil {
+			t.Fatalf("default target was changed: %v", err)
+		}
+	})
+
+	t.Run("transcript cleanup failure does not prevent target reset", func(t *testing.T) {
+		runtimeDir := t.TempDir()
+		transcript := filepath.Join(runtimeDir, "transcript.txt")
+		target := filepath.Join(runtimeDir, targetName)
+		if err := os.Mkdir(transcript, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		captureStderr(t, func() {
+			if err := (&command{runtimeDir: runtimeDir, transcript: transcript}).handleShort(); err != nil {
+				t.Fatalf("handleShort() error = %v", err)
+			}
+		})
+		if _, err := os.Lstat(target); !os.IsNotExist(err) {
+			t.Fatalf("target was not reset after transcript cleanup failure: %v", err)
+		}
+	})
+
+	t.Run("target reset failure happens after transcript cleanup", func(t *testing.T) {
+		runtimeDir := t.TempDir()
+		transcript := filepath.Join(runtimeDir, "transcript.txt")
+		target := filepath.Join(runtimeDir, targetName)
+		if err := os.WriteFile(transcript, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(target, 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := (&command{runtimeDir: runtimeDir, transcript: transcript}).handleShort(); err == nil {
+			t.Fatal("handleShort() succeeded when the target could not be removed")
+		}
+		if _, err := os.Lstat(transcript); !os.IsNotExist(err) {
+			t.Fatalf("transcript was not removed before target reset failed: %v", err)
+		}
+	})
+}
+
+func TestDefaultEditorInvocation(t *testing.T) {
+	command := &command{nvimCmd: "nvim", transcriptID: 3}
+	gotCommand, gotArgs := command.defaultEditorInvocation()
+	if gotCommand != "nvim" {
+		t.Fatalf("direct command = %q, want nvim", gotCommand)
 	}
-	if err := removeNonDirectory(dir); err == nil {
-		t.Fatal("removeNonDirectory() removed or accepted a directory")
+	wantArgs := []string{"-c", `lua require("talk2text")._default_start(3)`}
+	if strings.Join(gotArgs, "\n") != strings.Join(wantArgs, "\n") {
+		t.Fatalf("arguments = %q, want %q", gotArgs, wantArgs)
 	}
-	if _, err := os.Stat(dir); err != nil {
-		t.Fatalf("directory was removed: %v", err)
+
+	command.launchCmd = "launcher"
+	gotCommand, _ = command.defaultEditorInvocation()
+	if gotCommand != "launcher nvim" {
+		t.Fatalf("launch command = %q, want %q", gotCommand, "launcher nvim")
 	}
 }
 
@@ -90,30 +190,38 @@ func TestDetachedHookStartErrorsAreReported(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			stderr := filepath.Join(t.TempDir(), "stderr")
-			file, err := os.Create(stderr)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			original := os.Stderr
-			os.Stderr = file
-			test.invoke(&command{notifyCmd: "true", focusCmd: "true"})
-			os.Stderr = original
-			if err := file.Close(); err != nil {
-				t.Fatal(err)
-			}
-
-			contents, err := os.ReadFile(stderr)
-			if err != nil {
-				t.Fatal(err)
-			}
+			contents := captureStderr(t, func() {
+				test.invoke(&command{notifyCmd: "true", focusCmd: "true"})
+			})
 			want := "cannot start " + test.name + " hook:"
-			if !strings.Contains(string(contents), want) {
+			if !strings.Contains(contents, want) {
 				t.Fatalf("stderr = %q, want text containing %q", contents, want)
 			}
 		})
 	}
+}
+
+func captureStderr(t *testing.T, callback func()) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "stderr")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	original := os.Stderr
+	os.Stderr = file
+	defer func() { os.Stderr = original }()
+	callback()
+	os.Stderr = original
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(contents)
 }
 
 func TestDetachedHookInheritsStderr(t *testing.T) {

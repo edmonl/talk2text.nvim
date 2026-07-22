@@ -6,7 +6,7 @@ The executable command is named:
 talk2text-nvim
 ```
 
-The repository contains the Bash reference implementation at `bin/talk2text-nvim` and a Go implementation at the project root. The public contract is the command-line behavior in this spec, so users can select either implementation without changing how the command is invoked after installation.
+This document defines the command's externally observable behavior. Its implementation language and internal structure are not part of the public contract.
 
 It is used as the `talk2text` output command, so it accepts the same argument shape:
 
@@ -46,9 +46,9 @@ The command uses shell-configurable hooks for notifications, Neovim control, def
 
 The Neovim command is required. The launch command, notification hook, and focus hook are optional. A text delivery requires a non-empty Neovim command. A missing required setting causes failure when it is needed and does not trigger target fallback. Optional hooks are skipped when empty.
 
-Each setting is read from its correspondingly named environment variable; when it is unset, the listed default applies. Each non-empty setting is trusted shell code run with `sh -c`. Hooks inherit the output command's current environment and working directory. Generated arguments are appended internally, so settings do not include `"$@"`. Runtime values are supplied as shell positional parameters and must never be interpolated into hook code. The notification command receives the notification body as one argument. The Bash implementation appends Neovim client arguments for server probes and loads to the Neovim command. The Go implementation performs those operations directly over MessagePack-RPC without invoking the Neovim command. For default-editor startup, both implementations invoke the Neovim command directly when the launch command is empty; otherwise, they append the Neovim command and its startup arguments to the launch command. The focus command receives no generated arguments.
+Each setting is read from its correspondingly named environment variable; when it is unset, the listed default applies. Each non-empty setting is trusted shell code run with `sh -c`. Hooks inherit the output command's current environment and working directory. Generated arguments are appended internally, so settings do not include `"$@"`. Runtime values are supplied as shell positional parameters and must never be interpolated into hook code. The notification command receives the notification body as one argument. Existing-target probes and loads use MessagePack-RPC directly without invoking the Neovim command. For default-editor startup, the command invokes the Neovim command directly when the launch command is empty; otherwise, it appends the Neovim command and its startup arguments to the launch command. The focus command receives no generated arguments.
 
-The Go implementation detaches notification and focus hooks after successfully starting their shell process. Immediate shell-start failures and hook stderr are written to the output command's stderr without changing its exit status. For default-editor startup, it replaces the output-command process with the configured shell command. The Bash implementation waits for that shell command instead. In both implementations, default-editor startup remains attached to the caller and propagates the shell command's exit status. Notification and focus hooks retain their best-effort result semantics.
+Notification and focus hooks run asynchronously after their shell process starts successfully. Immediate shell-start failures and hook stderr are written to the output command's stderr without changing its exit status. Default-editor startup remains attached to the caller and propagates the configured shell command's exit status. Notification and focus hooks retain their best-effort result semantics.
 
 Users may set command hooks as environment variables for an invocation or wrapper, or copy the command and adapt its defaults. The distributed Neovim default satisfies the Neovim-command requirement. The empty launch-command default starts the new Neovim instance directly.
 
