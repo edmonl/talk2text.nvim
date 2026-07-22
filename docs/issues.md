@@ -13,9 +13,3 @@ State the supported Linux, Bash, and Neovim baseline. Extend the test checklist 
 The Lua API accepts non-finite and oversized numeric values that satisfy the current integer check but format as a different filename under LuaJIT. The Go command accepts signed 64-bit IDs, while the Bash command accepts arbitrarily long decimal strings, so the three boundaries do not share one numeric domain.
 
 **Recommended resolution:** Define one supported ID range and validate it consistently in Lua, Bash, and Go, or carry canonical decimal IDs as strings across the RPC boundary.
-
-## 3. Cleanup registration is recorded before autocmd creation succeeds
-
-Target cleanup bookkeeping is updated before `nvim_create_autocmd()` returns successfully. If autocmd creation raises an error, a later retry sees cleanup as already registered even though no cleanup callback exists.
-
-**Recommended resolution:** Record cleanup registration only after `nvim_create_autocmd()` succeeds, and add a regression test for a failed first registration followed by a successful retry.

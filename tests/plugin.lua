@@ -374,6 +374,33 @@ local function run()
   assert_true(#missing_notifications == 1, "missing runtime setup did not notify exactly once")
   assert_true(missing_notifications[1][1]:match("runtime directory") ~= nil, "runtime notification omitted the cause")
 
+  local original_create_autocmd = vim.api.nvim_create_autocmd
+  local cleanup_attempts = 0
+  vim.api.nvim_create_autocmd = function(...)
+    cleanup_attempts = cleanup_attempts + 1
+    if cleanup_attempts == 1 then
+      error("simulated cleanup registration failure")
+    end
+    return original_create_autocmd(...)
+  end
+  local cleanup_failure_notifications, cleanup_failure_ok, cleanup_failure_err = capture_notifications(function()
+    return talk2text.set_target(0)
+  end)
+  local cleanup_retry_notifications, cleanup_retry_ok = capture_notifications(function()
+    return talk2text.set_target(0)
+  end)
+  vim.api.nvim_create_autocmd = original_create_autocmd
+  assert_true(not cleanup_failure_ok, "cleanup registration failure returned success")
+  assert_true(
+    cleanup_failure_err:match("simulated cleanup registration failure") ~= nil,
+    "cleanup registration failure omitted the cause"
+  )
+  assert_equal(#cleanup_failure_notifications, 1, "cleanup registration failure did not notify exactly once")
+  assert_true(cleanup_retry_ok, "cleanup registration retry failed")
+  assert_equal(cleanup_attempts, 2, "cleanup registration was not retried")
+  assert_equal(#cleanup_retry_notifications, 0, "cleanup registration retry emitted a target-switch notification")
+
+  write_file(runtime_dir .. "/nvim-target", "replacement\n")
   local target_notifications, target_ok, target_err = capture_notifications(function()
     return talk2text.set_target(0)
   end)

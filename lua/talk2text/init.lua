@@ -122,7 +122,6 @@ local function register_cleanup(runtime_dir, filename, servername)
   if cleanup_servers[filename] == servername then
     return
   end
-  cleanup_servers[filename] = servername
   vim.api.nvim_create_autocmd('VimLeavePre', {
     once = true,
     desc = 'Remove Talk2text Neovim Target',
@@ -130,6 +129,7 @@ local function register_cleanup(runtime_dir, filename, servername)
       target.delete_if_matches(runtime_dir, filename, servername)
     end,
   })
+  cleanup_servers[filename] = servername
 end
 
 local function servername()
