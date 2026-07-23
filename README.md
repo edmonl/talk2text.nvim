@@ -48,7 +48,7 @@ The supported environment is:
 
 Building the output command requires Go 1.26 or newer. The resulting binary performs target locking and Neovim RPC directly.
 
-The default editor command invokes `nvim`, so it must be on `PATH` when a new editor needs to be started. Desktop notifications use `notify-send` by default but are best-effort and optional.
+The default launch command invokes `nvim`, so it must be on `PATH` when a new editor needs to be started. Desktop notifications use `notify-send` when it is available but are best-effort and optional.
 
 ### Install the Neovim Plugin
 
@@ -95,13 +95,13 @@ For each text transcript, `talk2text-nvim` tries targets in this order:
 2. An existing `default-nvim-target`.
 3. A newly started default editor.
 
-Missing targets are skipped. Empty and unreachable target files are cleaned up before the command continues to the next choice. A reachable target whose transcript load fails is not treated as stale; delivery stops so the same transcript is not inserted twice.
+Missing and zero-byte targets are skipped. A target that cannot be read, has a nonempty but blank first line, or contains a non-absolute socket path is removed and stops delivery with an error notification. An absolute but unreachable target is removed if it has not changed, reports a stale-target notification, and falls back to the next choice. A reachable target whose transcript load fails is not treated as stale; delivery stops with an error notification so the same transcript is not inserted twice.
 
 A `short` transcript acts as a shortcut to remove the explicit target. Future text then goes to the default editor. A `blank` transcript does not change either target.
 
 ## Default Editor
 
-By default, `talk2text-nvim` starts a new default editor by invoking the configured Neovim command directly. An optional launch command can prepare the new Neovim instance for a particular environment; the Neovim command and generated startup arguments are appended to it. If default-editor startup launches a graphical application, ensure that the output command has the graphical-session environment required by that application.
+By default, `talk2text-nvim` starts a new default editor with the launch command `nvim`. The launch command is complete and can prepare the new Neovim instance for a particular environment; generated startup arguments are appended to it. If default-editor startup launches a graphical application, ensure that the output command has the graphical-session environment required by that application.
 
 The default editor opens a no-file buffer, loads the transcript, and registers itself for later transcripts. In that buffer, `qq` copies the full buffer to the `+` clipboard register and closes the current window. The transcript buffer is wiped after its last window closes. Neovim exits when that is its last window; other windows and buffers are not forcefully closed. If copying fails, the window remains open.
 
@@ -111,10 +111,9 @@ When an existing default editor is reused, an optional focus hook can bring its 
 
 The output command is configured through environment variables:
 
-1. `TALK2TEXT_NVIM_CMD` controls the Neovim process used for default-editor startup. Existing-target probes and loads use MessagePack-RPC directly. Its default is `nvim`.
-2. `TALK2TEXT_NVIM_LAUNCH_CMD` optionally starts a default editor through a launch command. It is empty by default. When set, the Neovim command and generated arguments are appended to it; when unset, the Neovim command is invoked directly.
-3. `TALK2TEXT_NVIM_FOCUS_CMD` focuses an existing default editor. It is empty by default and is best-effort.
-4. `TALK2TEXT_NVIM_NOTIFY_CMD` reports blank and short transcripts. Its default is `notify-send -a talk2text -u normal -t 5000 Talk2text` and is best-effort.
+1. `TALK2TEXT_NVIM_LAUNCH_CMD` starts a default editor. Its default is `nvim`, and generated startup arguments are appended to it. Existing-target probes and loads use MessagePack-RPC and do not invoke this command.
+2. `TALK2TEXT_NVIM_FOCUS_CMD` focuses an existing default editor. It is empty by default and is best-effort.
+3. `TALK2TEXT_NVIM_NOTIFY_CMD` reports blank and short transcripts, stale-target cleanup, and fatal target errors. It is best-effort. Fatal target messages begin with `Error: `. When the variable is unset, its default is `notify-send -a talk2text -u normal -t 5000 Talk2text` if `notify-send` is available on `PATH`; otherwise notifications are disabled. An explicitly configured value is used without an availability check.
 
 Each non-empty value is trusted shell code executed with `sh -c`. Generated arguments are appended internally, so command settings do not include `"$@"`. Runtime values are passed as shell positional parameters and are never interpolated into hook code. Hooks inherit the output command's environment and working directory. Integrations are responsible for providing any environment required by configured hooks. The focus hook receives no generated arguments. The output command writes detached notification and focus hook startup errors and hook stderr to its stderr without changing its exit status.
 
@@ -157,8 +156,8 @@ Lua API IDs must be integers from 1 through 9007199254740991 when supplied expli
 ## Troubleshooting
 
 1. If `setup()` reports that the runtime directory or daemon socket is unavailable, start the `talk2text` daemon first and confirm that the plugin and daemon resolve the same runtime directory.
-2. If transcripts do not reach Neovim, confirm that `talk2text-nvim` is on `PATH`, `nvim` is on `PATH`, and the selected Neovim instance is still running.
-3. If no selected target exists and default-editor startup fails, confirm that `TALK2TEXT_NVIM_CMD` can start Neovim directly, or configure `TALK2TEXT_NVIM_LAUNCH_CMD` when a launch command is needed.
+2. If transcripts do not reach a selected Neovim instance, confirm that `talk2text-nvim` is on `PATH` and the selected instance is still running.
+3. If no selected target exists and default-editor startup fails, confirm that `TALK2TEXT_NVIM_LAUNCH_CMD` can start Neovim.
 4. If an existing default editor does not come forward, configure `TALK2TEXT_NVIM_FOCUS_CMD` for your window manager.
 5. If `qq` cannot copy from the default editor, check Neovim's `+` clipboard provider with `:checkhealth`.
 6. Run `talk2text-nvim <kind> <absolute-transcript-path>` directly from a shell to inspect errors written to stderr.

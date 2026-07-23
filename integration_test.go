@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	targetName        = "nvim-target"
+	defaultTargetName = "default-nvim-target"
+)
+
 // Embedding the Lua inputs makes changes to them invalidate Go's test cache.
 //
 //go:embed lua/talk2text/*.lua tests/plugin.lua
@@ -46,16 +51,19 @@ func TestNeovimIntegration(t *testing.T) {
 	runSuccessfulProcess(t, projectRoot, integrationEnvironment(nil),
 		"go", "build", "-o", binary, projectRoot)
 
-	runtimeDir := filepath.Join(testDir, "runtime")
+	runtimeDir := filepath.Join(testDir, "runtime with spaces")
 	transcriptDir := filepath.Join(runtimeDir, "transcripts")
 	if err := os.MkdirAll(transcriptDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 
 	focusLog := filepath.Join(testDir, "focus.log")
+	notifyLog := filepath.Join(testDir, "notify.log")
 	hookEnvironment := map[string]string{
-		"TALK2TEXT_TEST_FOCUS_LOG": focusLog,
-		"TALK2TEXT_NVIM_FOCUS_CMD": `printf "focused\n" >> "$TALK2TEXT_TEST_FOCUS_LOG"`,
+		"TALK2TEXT_TEST_FOCUS_LOG":  focusLog,
+		"TALK2TEXT_TEST_NOTIFY_LOG": notifyLog,
+		"TALK2TEXT_NVIM_FOCUS_CMD":  `printf "focused\n" >> "$TALK2TEXT_TEST_FOCUS_LOG"`,
+		"TALK2TEXT_NVIM_NOTIFY_CMD": `record_notification() { printf "%s\n" "$1" >> "$TALK2TEXT_TEST_NOTIFY_LOG"; }; record_notification`,
 	}
 
 	socket := filepath.Join(testDir, "server.sock")
@@ -90,9 +98,8 @@ func TestNeovimIntegration(t *testing.T) {
 
 	firstPath := filepath.Join(transcriptDir, "1.txt")
 	writeFile(t, firstPath, "first line\nsecond line\n")
-	hookEnvironment["TALK2TEXT_NVIM_CMD"] = "exit 97"
+	hookEnvironment["TALK2TEXT_NVIM_LAUNCH_CMD"] = ""
 	runOutputCommand(t, projectRoot, hookEnvironment, binary, "text", firstPath)
-	delete(hookEnvironment, "TALK2TEXT_NVIM_CMD")
 	loaded := runNvimExpression(t, projectRoot, socket, `join(getline(1,"$"), "|")`)
 	if loaded != "first line|second line" {
 		t.Fatalf("unexpected RPC buffer: %q", loaded)
@@ -116,6 +123,10 @@ func TestNeovimIntegration(t *testing.T) {
 		contents, err := os.ReadFile(focusLog)
 		return err == nil && strings.TrimSpace(string(contents)) == "focused"
 	})
+	waitFor(t, "stale target notification", func() bool {
+		contents, err := os.ReadFile(notifyLog)
+		return err == nil && strings.Contains(string(contents), "Stale target /tmp/stale-talk2text-nvim.sock removed")
+	})
 
 	runNvimExpression(t, projectRoot, socket, `execute("setlocal nomodifiable")`)
 	failedPath := filepath.Join(transcriptDir, "4.txt")
@@ -125,6 +136,10 @@ func TestNeovimIntegration(t *testing.T) {
 	}
 	assertExists(t, failedPath)
 	assertExists(t, filepath.Join(runtimeDir, defaultTargetName))
+	waitFor(t, "target error notification", func() bool {
+		contents, err := os.ReadFile(notifyLog)
+		return err == nil && strings.Contains(string(contents), "Error: failed to load transcript 4:")
+	})
 	runNvimExpression(t, projectRoot, socket, `execute("setlocal modifiable")`)
 
 	runNvimExpression(t, projectRoot, socket, `luaeval("require(\"talk2text\").set_target()")`)
@@ -154,8 +169,7 @@ func TestNeovimIntegration(t *testing.T) {
 		"TALK2TEXT_TEST_ROOT":            projectRoot,
 		"TALK2TEXT_TEST_CWD_LOG":         startupCWDLog,
 		"TALK2TEXT_TEST_STARTUP_RUNTIME": startupRuntime,
-		"TALK2TEXT_NVIM_CMD":             `nvim --headless -u NONE -i NONE -n --cmd "set runtimepath^=$TALK2TEXT_TEST_ROOT" --cmd "lua vim.fn.serverstart(vim.env.TALK2TEXT_TEST_STARTUP_RUNTIME .. \"/daemon.sock\"); require(\"talk2text\").setup({runtime_dir=vim.env.TALK2TEXT_TEST_STARTUP_RUNTIME})"`,
-		"TALK2TEXT_NVIM_LAUNCH_CMD":      `pwd > "$TALK2TEXT_TEST_CWD_LOG"; run_launch_command() { "$@" +q; }; run_launch_command`,
+		"TALK2TEXT_NVIM_LAUNCH_CMD":      `pwd > "$TALK2TEXT_TEST_CWD_LOG"; run_launch_command() { "$@" +q; }; run_launch_command nvim --headless -u NONE -i NONE -n --cmd "set runtimepath^=$TALK2TEXT_TEST_ROOT" --cmd "lua vim.fn.serverstart(vim.env.TALK2TEXT_TEST_STARTUP_RUNTIME .. \"/daemon.sock\"); require(\"talk2text\").setup({runtime_dir=vim.env.TALK2TEXT_TEST_STARTUP_RUNTIME})"`,
 		"XDG_RUNTIME_DIR":                startupBase,
 		"NVIM_LOG_FILE":                  filepath.Join(testDir, "startup-nvim.log"),
 	}
@@ -173,7 +187,7 @@ func TestNeovimIntegration(t *testing.T) {
 	directFailurePath := filepath.Join(directTranscriptDir, "2.txt")
 	writeFile(t, directFailurePath, "retain after failed direct startup")
 	failedDirectEnvironment := map[string]string{
-		"TALK2TEXT_NVIM_CMD": `failed_direct_launch() { return 23; }; failed_direct_launch`,
+		"TALK2TEXT_NVIM_LAUNCH_CMD": `failed_direct_launch() { return 23; }; failed_direct_launch`,
 	}
 	if output, err := runProcess(projectRoot, integrationEnvironment(failedDirectEnvironment), binary, "text", directFailurePath); err == nil {
 		t.Fatalf("failed direct Neovim launch returned success; output: %s", output)
@@ -196,7 +210,7 @@ func runSuccessfulProcess(t *testing.T, directory string, environment []string, 
 	t.Helper()
 	output, err := runProcess(directory, environment, name, args...)
 	if err != nil {
-		t.Fatalf("%s %s failed: %v\n%s", name, strings.Join(args, " "), err, output)
+		t.Fatalf("%s %s failed: %s\n%s", name, strings.Join(args, " "), err, output)
 	}
 	return output
 }
@@ -215,13 +229,13 @@ func runProcess(directory string, environment []string, name string, args ...str
 func integrationEnvironment(overrides map[string]string) []string {
 	controlled := map[string]bool{
 		"NVIM_LOG_FILE":                  true,
-		"TALK2TEXT_NVIM_CMD":             true,
 		"TALK2TEXT_NVIM_FOCUS_CMD":       true,
 		"TALK2TEXT_NVIM_LAUNCH_CMD":      true,
 		"TALK2TEXT_NVIM_NOTIFY_CMD":      true,
 		"TALK2TEXT_TEST_CWD_LOG":         true,
 		"TALK2TEXT_TEST_DIR":             true,
 		"TALK2TEXT_TEST_FOCUS_LOG":       true,
+		"TALK2TEXT_TEST_NOTIFY_LOG":      true,
 		"TALK2TEXT_TEST_ROOT":            true,
 		"TALK2TEXT_TEST_STARTUP_RUNTIME": true,
 		"XDG_RUNTIME_DIR":                true,
@@ -292,13 +306,13 @@ func firstLine(t *testing.T, path string) string {
 func assertExists(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Lstat(path); err != nil {
-		t.Fatalf("expected %s to exist: %v", path, err)
+		t.Fatalf("expected %s to exist: %s", path, err)
 	}
 }
 
 func assertAbsent(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Lstat(path); !os.IsNotExist(err) {
-		t.Fatalf("expected %s to be absent; stat error: %v", path, err)
+		t.Fatalf("expected %s to be absent; stat error: %s", path, err)
 	}
 }
