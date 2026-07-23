@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/edmonl/talk2text.nvim/internal/command/runtime"
@@ -44,9 +45,9 @@ type Command struct {
 // New creates a Command using the configured editor and notification hooks.
 func New(runtimeDir, transcriptPath string, transcriptID int) *Command {
 	return &Command{
-		notifyCmd:      notificationCommand(),
-		launchCmd:      environmentOrDefault("TALK2TEXT_NVIM_LAUNCH_CMD", "nvim"),
-		focusCmd:       environmentOrDefault("TALK2TEXT_NVIM_FOCUS_CMD", ""),
+		notifyCmd:      strings.TrimSpace(notificationCommand()),
+		launchCmd:      strings.TrimSpace(environmentOrDefault("TALK2TEXT_NVIM_LAUNCH_CMD", "nvim")),
+		focusCmd:       strings.TrimSpace(environmentOrDefault("TALK2TEXT_NVIM_FOCUS_CMD", "")),
 		runtimeDir:     runtimeDir,
 		transcriptPath: transcriptPath,
 		transcriptID:   transcriptID,

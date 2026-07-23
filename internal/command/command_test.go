@@ -36,7 +36,7 @@ func TestNewCommandNotification(t *testing.T) {
 
 	t.Run("preserves explicit command without checking it", func(t *testing.T) {
 		t.Setenv("PATH", t.TempDir())
-		t.Setenv("TALK2TEXT_NVIM_NOTIFY_CMD", "missing-notifier --flag")
+		t.Setenv("TALK2TEXT_NVIM_NOTIFY_CMD", " \tmissing-notifier --flag\n")
 
 		if got := New("", "", 0).notifyCmd; got != "missing-notifier --flag" {
 			t.Fatalf("notification command = %q, want explicit command", got)
@@ -44,7 +44,7 @@ func TestNewCommandNotification(t *testing.T) {
 	})
 
 	t.Run("preserves explicit empty command", func(t *testing.T) {
-		t.Setenv("TALK2TEXT_NVIM_NOTIFY_CMD", "")
+		t.Setenv("TALK2TEXT_NVIM_NOTIFY_CMD", " \t\n")
 
 		if got := New("", "", 0).notifyCmd; got != "" {
 			t.Fatalf("notification command = %q, want disabled", got)
@@ -62,10 +62,28 @@ func TestNewCommandLaunch(t *testing.T) {
 	})
 
 	t.Run("preserves explicit command", func(t *testing.T) {
-		t.Setenv("TALK2TEXT_NVIM_LAUNCH_CMD", "terminal -- nvim")
+		t.Setenv("TALK2TEXT_NVIM_LAUNCH_CMD", " \tterminal -- nvim\n")
 
 		if got := New("", "", 0).launchCmd; got != "terminal -- nvim" {
 			t.Fatalf("launch command = %q, want explicit command", got)
+		}
+	})
+}
+
+func TestNewCommandFocus(t *testing.T) {
+	t.Run("is empty by default", func(t *testing.T) {
+		unsetEnvironment(t, "TALK2TEXT_NVIM_FOCUS_CMD")
+
+		if got := New("", "", 0).focusCmd; got != "" {
+			t.Fatalf("focus command = %q, want empty", got)
+		}
+	})
+
+	t.Run("trims explicit command", func(t *testing.T) {
+		t.Setenv("TALK2TEXT_NVIM_FOCUS_CMD", " \tfocus-window --current\n")
+
+		if got := New("", "", 0).focusCmd; got != "focus-window --current" {
+			t.Fatalf("focus command = %q, want trimmed explicit command", got)
 		}
 	})
 }
