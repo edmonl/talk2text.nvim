@@ -8,6 +8,7 @@ The public Lua API is:
 require("talk2text").setup(opts)
 require("talk2text").set_target(id)
 require("talk2text").load(id)
+require("talk2text").start_default_target(id)
 ```
 
 # `setup(opts)`
@@ -75,20 +76,22 @@ Behavior:
 
 The plugin remembers one failed ID in memory for the current Neovim session. A failed explicit load replaces the remembered ID, a failed retry keeps it, and any successful load clears it. A failed load does not partially change the buffer. If removing the source file fails after text was inserted, the plugin returns `false, err` without remembering a retry, because retrying could insert the same transcript twice.
 
-# Default Editor Startup
+# `start_default_target(id)`
 
-When the command starts a default editor, startup should:
+Configures the current Neovim instance as a plugin-managed default target:
 
 1. Use the user's normal Neovim configuration, including any user-provided `require("talk2text").setup(...)` call.
-2. Register the new Neovim server as `default-nvim-target` through the internal startup adapter.
-3. For `text <path>`, load the derived transcript ID through the internal startup adapter.
+2. Register the current Neovim server as `default-nvim-target`.
+3. Load the supplied transcript ID.
 4. Configure the `qq` normal-mode mapping for the default editor buffer.
 
-If default-target registration fails, report the error in Neovim and still attempt the initial load. A successful load still removes the transcript even when registration failed.
+The output command does not call this function automatically when launching the configured default editor. Custom launch integrations may invoke it when they want this behavior.
+
+If default-target registration fails, the function reports the error in Neovim and still attempts the initial load. A successful load still removes the transcript even when registration failed.
 
 If the startup load fails, report the error in Neovim and retain the transcript for retry.
 
-The default editor uses a no-file buffer. It should not open the transcript file as the editable buffer.
+The function changes the current buffer into a no-file buffer before loading the transcript.
 
 The buffer-local `qq` mapping copies the full default editor buffer content to the `+` clipboard register. If copying fails, it leaves the window open. After a successful copy, it closes the current window; Neovim exits when that is its last window. Because the transcript buffer has `buftype=nofile`, its modifications do not block closing. Its `bufhidden=wipe` setting removes the transcript buffer after its last window closes. The mapping does not force-close other windows or modified normal buffers. It does not save anything or emit output.
 

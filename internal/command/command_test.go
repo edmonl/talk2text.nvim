@@ -221,7 +221,7 @@ func TestHandleShort(t *testing.T) {
 }
 
 func TestDefaultEditorInvocation(t *testing.T) {
-	t.Run("passes generated arguments to the launch command", func(t *testing.T) {
+	t.Run("passes the transcript path to the launch command", func(t *testing.T) {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestDefaultEditorInvocationHelper$")
 		cmd.Env = append(os.Environ(), "TALK2TEXT_NVIM_TEST_DEFAULT_EDITOR=1")
 		output, err := cmd.CombinedOutput()
@@ -229,7 +229,7 @@ func TestDefaultEditorInvocation(t *testing.T) {
 			t.Fatalf("launchDefault() process error = %s: %s", err, output)
 		}
 		gotArgs := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
-		wantArgs := []string{"-c", `lua require("talk2text").start_default_target(3)`}
+		wantArgs := []string{"/tmp/runtime with spaces/transcripts/3"}
 		if strings.Join(gotArgs, "\n") != strings.Join(wantArgs, "\n") {
 			t.Fatalf("arguments = %q, want %q", gotArgs, wantArgs)
 		}
@@ -246,7 +246,10 @@ func TestDefaultEditorInvocationHelper(t *testing.T) {
 	if os.Getenv("TALK2TEXT_NVIM_TEST_DEFAULT_EDITOR") != "1" {
 		return
 	}
-	if err := (&Command{launchCmd: `printf '%s\n'`, transcriptID: 3}).launchDefault(); err != nil {
+	if err := (&Command{
+		launchCmd:      `printf '%s\n'`,
+		transcriptPath: "/tmp/runtime with spaces/transcripts/3",
+	}).launchDefault(); err != nil {
 		t.Fatal(err)
 	}
 }

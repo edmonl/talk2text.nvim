@@ -101,9 +101,9 @@ A `short` transcript acts as a shortcut to remove the explicit target. Future te
 
 ## Default Editor
 
-By default, `talk2text-nvim` starts a new default editor with the launch command `nvim`. The launch command is complete and can prepare the new Neovim instance for a particular environment; generated startup arguments are appended to it. If default-editor startup launches a graphical application, ensure that the output command has the graphical-session environment required by that application.
+By default, `talk2text-nvim` starts a new default editor as `nvim <transcript-path>`. The launch command is complete and can prepare the new Neovim instance for a particular environment; the transcript path is appended as its only generated argument. If default-editor startup launches a graphical application, ensure that the output command has the graphical-session environment required by that application.
 
-The default editor opens a no-file buffer, loads the transcript, and registers itself for later transcripts. In that buffer, `qq` copies the full buffer to the `+` clipboard register and closes the current window. The transcript buffer is wiped after its last window closes. Neovim exits when that is its last window; other windows and buffers are not forcefully closed. If copying fails, the window remains open.
+The default launch command opens the transcript as a normal file. Launching does not automatically register the new editor as `default-nvim-target` or remove the transcript. Custom launch integrations may invoke `require("talk2text").start_default_target(id)` when they want the plugin-managed no-file buffer, target registration, and `qq` copy-and-close mapping.
 
 When an existing default editor is reused, an optional focus hook can bring its window forward.
 
@@ -111,11 +111,11 @@ When an existing default editor is reused, an optional focus hook can bring its 
 
 The output command is configured through environment variables:
 
-1. `TALK2TEXT_NVIM_LAUNCH_CMD` starts a default editor. Its default is `nvim`, and generated startup arguments are appended to it. Existing-target probes and loads use MessagePack-RPC and do not invoke this command.
+1. `TALK2TEXT_NVIM_LAUNCH_CMD` starts a default editor. Its default is `nvim`, and the transcript path is appended as its only generated argument. Existing-target probes and loads use MessagePack-RPC and do not invoke this command.
 2. `TALK2TEXT_NVIM_FOCUS_CMD` focuses an existing default editor. It is empty by default and is best-effort.
 3. `TALK2TEXT_NVIM_NOTIFY_CMD` reports blank and short transcripts, stale-target cleanup, and fatal target errors. It is best-effort. Fatal target messages begin with `Error: `. When the variable is unset, its default is `notify-send -a talk2text -u normal -t 5000 Talk2text` if `notify-send` is available on `PATH`; otherwise notifications are disabled. An explicitly configured value is used without an availability check.
 
-Each non-empty value is trusted shell code executed with `sh -c`. Generated arguments are appended internally, so command settings do not include `"$@"`. Runtime values are passed as shell positional parameters and are never interpolated into hook code. Hooks inherit the output command's environment and working directory. Integrations are responsible for providing any environment required by configured hooks. The focus hook receives no generated arguments. The output command writes detached notification and focus hook startup errors and hook stderr to its stderr without changing its exit status.
+Each non-empty value is trusted shell code executed with `sh -c`. Generated arguments are appended internally, so command settings do not include `"$@"`. Runtime values are passed as shell positional parameters and are never interpolated into hook code. Hooks inherit the output command's environment and working directory. Integrations are responsible for providing any environment required by configured hooks. The launch command receives the transcript path, and the focus hook receives no generated arguments. The output command writes detached notification and focus hook startup errors and hook stderr to its stderr without changing its exit status.
 
 ## Runtime Directory
 

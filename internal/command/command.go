@@ -162,8 +162,8 @@ func (c *Command) launchDefault() error {
 	if err != nil {
 		return err
 	}
-	code := fmt.Sprintf(`%s -c 'lua require("talk2text").start_default_target(%d)'`, c.launchCmd, c.transcriptID)
-	return syscall.Exec(shell, []string{"sh", "-c", code}, os.Environ())
+	code := c.launchCmd + ` "$@"`
+	return syscall.Exec(shell, []string{"sh", "-c", code, "talk2text-nvim-launch", c.transcriptPath}, os.Environ())
 }
 
 // HandleBlank removes a blank transcript and notifies the user.

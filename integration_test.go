@@ -174,7 +174,7 @@ func TestNeovimIntegration(t *testing.T) {
 		"NVIM_LOG_FILE":                  filepath.Join(testDir, "startup-nvim.log"),
 	}
 	runOutputCommand(t, testDir, startupEnvironment, binary, "text", startupPath)
-	waitForAbsence(t, startupPath)
+	assertExists(t, startupPath)
 	if got := strings.TrimSpace(readFile(t, startupCWDLog)); got != testDir {
 		t.Fatalf("launch command working directory = %q, want %q", got, testDir)
 	}

@@ -338,7 +338,7 @@ function M.set_target(id)
   return M.load(id)
 end
 
----Internal startup adapter used by talk2text-nvim's default editor.
+---Configure this Neovim as a plugin-managed default target and load a transcript.
 ---@param id integer
 function M.start_default_target(id)
   local buffer = vim.api.nvim_get_current_buf()
