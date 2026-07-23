@@ -329,12 +329,11 @@ end
 function M.set_target(id)
   local ok, changed_or_err = try_set_target('nvim-target')
   if not ok then
-    local err = tostring(changed_or_err)
-    notify_error(err)
-    return nil, err
+    notify_error(changed_or_err)
+    return nil, tostring(changed_or_err)
   end
   if changed_or_err then
-    notify('This Neovim is now the talk2text target', vim.log.levels.INFO)
+    notify('This Neovim is now Talk2text target', vim.log.levels.INFO)
   end
   return M.load(id)
 end
@@ -359,6 +358,7 @@ function M._default_start(id)
   local buffer = vim.api.nvim_get_current_buf()
   vim.api.nvim_set_option_value('buftype', 'nofile', { buf = buffer })
   vim.api.nvim_set_option_value('bufhidden', 'wipe', { buf = buffer })
+
   local ok, err = try_set_target('default-nvim-target')
   if not ok then
     notify_error(err)
