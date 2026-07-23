@@ -65,7 +65,7 @@ For normal text transcripts:
 8. If neither target file is present or reachable, start a new default Neovim editor through the configured launch command.
 9. Apply the main specification's stale-target cleanup rule before continuing to the next fallback.
 
-Successful loads remove the transcript file. If a target is reachable but the load fails, returns `nil, err`, or raises a Lua error, the command exits nonzero instead of falling back. This includes failure to remove the file after it was loaded; it does not retry the load, because retrying could append the same transcript twice. The file remains for `talk2text`'s next startup cleanup.
+Successful loads remove the transcript file. If a target is reachable but the load returns `false, err` or raises a Lua error, the command exits nonzero instead of falling back. This includes failure to remove the file after it was loaded; it does not retry the load, because retrying could append the same transcript twice. The file remains for `talk2text`'s next startup cleanup.
 
 If an absolute target cannot be reached as a Neovim server, the command treats that target as stale and falls back according to the target resolution order after conditionally deleting it. Successful stale deletion emits a stale-target notification. Target read errors, a nonempty blank first line, a non-absolute socket path, cleanup failures, and reachable-target load failures are fatal and emit notifications beginning with `Error: `.
 

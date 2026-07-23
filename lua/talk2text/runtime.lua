@@ -11,7 +11,7 @@ local function flock(fd, operation)
   while ffi.C.flock(fd, operation) ~= 0 do
     local errno = ffi.errno()
     if errno ~= 4 then -- Linux EINTR: retry an interrupted system call.
-      return nil, ('flock failed with errno %d'):format(errno)
+      return false, ('flock failed with errno %d'):format(errno)
     end
   end
   return true
@@ -90,13 +90,13 @@ end
 
 ---Check that the daemon socket accepts a connection.
 ---@param runtime_dir string
----@return true|nil ok
+---@return boolean ok
 ---@return string|nil err
 function M.check_daemon(runtime_dir)
   local socket_path = runtime_dir .. '/daemon.sock'
   local connected, channel = pcall(vim.fn.sockconnect, 'pipe', socket_path, { rpc = false })
   if not connected or channel == 0 then
-    return nil, 'talk2text daemon is unavailable: ' .. socket_path
+    return false, 'talk2text daemon is unavailable: ' .. socket_path
   end
   pcall(vim.fn.chanclose, channel)
   return true

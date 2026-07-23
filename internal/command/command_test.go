@@ -211,7 +211,7 @@ func TestDefaultEditorInvocation(t *testing.T) {
 			t.Fatalf("launchDefault() process error = %s: %s", err, output)
 		}
 		gotArgs := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
-		wantArgs := []string{"-c", `lua require("talk2text")._default_start(3)`}
+		wantArgs := []string{"-c", `lua require("talk2text").start_default_target(3)`}
 		if strings.Join(gotArgs, "\n") != strings.Join(wantArgs, "\n") {
 			t.Fatalf("arguments = %q, want %q", gotArgs, wantArgs)
 		}

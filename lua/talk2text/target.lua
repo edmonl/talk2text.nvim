@@ -29,7 +29,7 @@ local function write_all(fd, contents)
   while offset < #contents do
     local written, err = uv.fs_write(fd, contents:sub(offset + 1), offset)
     if not written then
-      return nil, err
+      return false, err
     end
     offset = offset + written
   end
@@ -50,24 +50,24 @@ local function atomic_write(path, contents)
     end
   end
   if not fd then
-    return nil, open_err
+    return false, open_err
   end
 
   local written, write_err = write_all(fd, contents)
   local closed, close_err = uv.fs_close(fd)
   if not written then
     uv.fs_unlink(temporary)
-    return nil, write_err
+    return false, write_err
   end
   if not closed then
     uv.fs_unlink(temporary)
-    return nil, close_err
+    return false, close_err
   end
 
   local renamed, rename_err = uv.fs_rename(temporary, path)
   if not renamed then
     uv.fs_unlink(temporary)
-    return nil, rename_err
+    return false, rename_err
   end
   return true
 end
@@ -76,13 +76,13 @@ end
 ---@param runtime_dir string
 ---@param filename string
 ---@param servername string
----@return boolean|nil ok
+---@return boolean ok
 ---@return boolean|string|nil changed_or_err Whether the target changed, or an error on failure.
 function M.claim(runtime_dir, filename, servername)
-  return runtime.with_lock(runtime_dir, function()
+  local ok, changed_or_err = runtime.with_lock(runtime_dir, function()
     local exists, value_or_err = read_first_line(runtime_dir .. '/' .. filename)
     if exists == nil then
-      return nil, value_or_err
+      return false, value_or_err
     end
     if exists and value_or_err == servername then
       return true, false
@@ -90,23 +90,24 @@ function M.claim(runtime_dir, filename, servername)
 
     local written, write_err = atomic_write(runtime_dir .. '/' .. filename, servername .. '\n')
     if not written then
-      return nil, write_err
+      return false, write_err
     end
     return true, true
   end)
+  return ok == true, changed_or_err
 end
 
 ---Delete a target file only when it still identifies the expected server.
 ---@param runtime_dir string
 ---@param filename string
 ---@param servername string
----@return boolean|nil ok
+---@return boolean ok
 ---@return string|nil err
 function M.delete_if_matches(runtime_dir, filename, servername)
-  return runtime.with_lock(runtime_dir, function()
+  local ok, err = runtime.with_lock(runtime_dir, function()
     local exists, value_or_err = read_first_line(runtime_dir .. '/' .. filename)
     if exists == nil then
-      return nil, value_or_err
+      return false, value_or_err
     end
     if not exists or value_or_err ~= servername then
       return true
@@ -114,10 +115,11 @@ function M.delete_if_matches(runtime_dir, filename, servername)
 
     local removed, remove_err = uv.fs_unlink(runtime_dir .. '/' .. filename)
     if not removed then
-      return nil, remove_err
+      return false, remove_err
     end
     return true
   end)
+  return ok == true, err
 end
 
 return M

@@ -18,9 +18,7 @@ import (
 )
 
 const (
-	remoteOK         = "ok"
-	probeLua         = "return true"
-	remoteLoadLua    = `return require("talk2text")._remote_load(...)`
+	remoteLoadLua    = `local called, loaded = pcall(require("talk2text").load, ...); return called and loaded`
 	defaultNotifyCmd = "notify-send -a talk2text -u normal -t 5000 Talk2text"
 )
 
@@ -119,16 +117,16 @@ func (c *Command) tryTarget(name string) (targetResult, error) {
 	defer client.Close()
 
 	var probe bool
-	if err := client.ExecLua(probeLua, &probe); err != nil {
+	if err := client.ExecLua("return true", &probe); err != nil {
 		return c.handleStaleTarget(name, address)
 	}
 
-	var response string
-	if err := client.ExecLua(remoteLoadLua, &response, c.transcriptID); err != nil || response != remoteOK {
-		if err == nil {
-			err = errors.New(response)
-		}
+	var loaded bool
+	if err := client.ExecLua(remoteLoadLua, &loaded, c.transcriptID); err != nil {
 		return targetFatal, fmt.Errorf("failed to load transcript %d: %w", c.transcriptID, err)
+	}
+	if !loaded {
+		return targetFatal, fmt.Errorf("failed to load transcript %d: Neovim rejected the load", c.transcriptID)
 	}
 	return targetDelivered, nil
 }
@@ -163,7 +161,7 @@ func (c *Command) launchDefault() error {
 	if err != nil {
 		return err
 	}
-	code := fmt.Sprintf(`%s -c 'lua require("talk2text")._default_start(%d)'`, c.launchCmd, c.transcriptID)
+	code := fmt.Sprintf(`%s -c 'lua require("talk2text").start_default_target(%d)'`, c.launchCmd, c.transcriptID)
 	return syscall.Exec(shell, []string{"sh", "-c", code}, os.Environ())
 }
 

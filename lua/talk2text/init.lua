@@ -59,7 +59,7 @@ end
 
 ---Append text to the cursor's current line.
 ---@param text string
----@return true|nil ok
+---@return boolean ok
 ---@return boolean|string changed_or_err Whether the buffer changed, or the error on failure.
 local function append_text_at_cursor_line(text)
   local lines = vim.split(text, '\n', { plain = true, trimempty = true })
@@ -76,7 +76,7 @@ local function append_text_at_cursor_line(text)
   local row = math.max(vim.api.nvim_win_get_cursor(0)[1], 1)
   local ok, err = pcall(vim.api.nvim_buf_set_lines, 0, row - 1, row, true, lines)
   if not ok then
-    return nil, tostring(err)
+    return false, tostring(err)
   end
   pcall(vim.api.nvim_win_set_cursor, 0, { row + #lines - 1, 0 })
   return true, true
@@ -84,7 +84,7 @@ end
 
 ---Insert a word after the whitespace-delimited word under the cursor.
 ---@param word string
----@return true|nil ok
+---@return boolean ok
 ---@return true|string changed_or_err True on success, or the error on failure.
 local function insert_word_at_cursor(word)
   local cursor = vim.api.nvim_win_get_cursor(0)
@@ -116,7 +116,7 @@ local function insert_word_at_cursor(word)
 
   local ok, err = pcall(vim.api.nvim_set_current_line, prefix .. word .. suffix)
   if not ok then
-    return nil, tostring(err)
+    return false, tostring(err)
   end
   pcall(vim.api.nvim_win_set_cursor, 0, { cursor[1], #prefix })
   return true, true
@@ -150,21 +150,21 @@ end
 
 ---Publish the current Neovim server as a target and register its exit cleanup.
 ---@param filename string
----@return true|nil ok
+---@return boolean ok
 ---@return boolean|string changed_or_err Whether the target changed, or the error on failure.
 local function set_target_file(filename)
   local runtime_dir, runtime_err = get_runtime_dir()
   if not runtime_dir then
-    return nil, tostring(runtime_err)
+    return false, tostring(runtime_err)
   end
 
   local name, server_err = servername()
   if not name then
-    return nil, tostring(server_err)
+    return false, tostring(server_err)
   end
   local ok, changed_or_err = target.claim(runtime_dir, filename, name)
   if not ok then
-    return nil, ('cannot write %s: %s'):format(filename, changed_or_err)
+    return false, ('cannot write %s: %s'):format(filename, changed_or_err)
   end
   register_cleanup(runtime_dir, filename, name)
   return true, changed_or_err == true
@@ -172,15 +172,15 @@ end
 
 ---Set a target file while converting unexpected Lua errors into returned errors.
 ---@param filename string
----@return true|nil ok
+---@return boolean ok
 ---@return boolean|string changed_or_err Whether the target changed, or the error on failure.
 local function try_set_target(filename)
   local called, result, changed_or_err = pcall(set_target_file, filename)
   if not called then
-    return nil, tostring(result)
+    return false, tostring(result)
   end
   if not result then
-    return nil, tostring(changed_or_err)
+    return false, tostring(changed_or_err)
   end
   return true, changed_or_err
 end
@@ -204,27 +204,27 @@ end
 local function setup(opts)
   opts = opts or {}
   if type(opts) ~= 'table' then
-    return nil, 'setup expects a table'
+    return false, 'setup expects a table'
   end
   for key in pairs(opts) do
     if key ~= 'runtime_dir' then
-      return nil, 'unknown option: ' .. tostring(key)
+      return false, 'unknown option: ' .. tostring(key)
     end
   end
   local runtime_dir, runtime_err = runtime.resolve(opts.runtime_dir)
   if not runtime_dir then
-    return nil, runtime_err
+    return false, runtime_err
   end
   if config.runtime_dir == runtime_dir then
     return true
   end
   if config.runtime_dir ~= nil then
-    return nil, ('cannot change already resolved runtime directory %s to %s')
+    return false, ('cannot change already resolved runtime directory %s to %s')
       :format(config.runtime_dir, runtime_dir)
   end
   local daemon_ok, daemon_err = runtime.check_daemon(runtime_dir)
   if not daemon_ok then
-    return nil, daemon_err
+    return false, daemon_err
   end
   config.runtime_dir = runtime_dir
   return true
@@ -232,20 +232,20 @@ end
 
 ---Configure talk2text.nvim.
 ---@param opts? {runtime_dir?: string}
----@return true|nil ok
+---@return boolean ok
 ---@return string|nil err
 function M.setup(opts)
   local ok, err = setup(opts)
   if not ok then
     notify_error(err)
-    return nil, err
+    return false, err
   end
   return true
 end
 
 ---Load a transcript by ID, or retry the last failed ID.
 ---@param id any A positive safe integer, nil, or zero; other values produce a validation failure.
----@return true|nil ok
+---@return boolean ok
 ---@return string|nil err
 ---@return any reported_id The failed or successfully retried ID to report; nil otherwise.
 local function load(id)
@@ -261,20 +261,20 @@ local function load(id)
     end
     retried_id = id
   elseif type(id) ~= 'number' or id ~= math.floor(id) or id < 1 or id > max_transcript_id then
-    return nil, ('transcript ID must be a positive and safe integer'), id
+    return false, ('transcript ID must be a positive and safe integer'), id
   end
 
   local runtime_dir, runtime_err = get_runtime_dir()
   if not runtime_dir then
     failed_id = id
-    return nil, runtime_err, id
+    return false, runtime_err, id
   end
   local path = ('%s/transcripts/%d'):format(runtime_dir, id)
 
   local contents, read_err = read_transcript_file(path)
   if contents == nil then
     failed_id = id
-    return nil, read_err, id
+    return false, read_err, id
   end
 
   local transcript = vim.trim(contents)
@@ -286,7 +286,7 @@ local function load(id)
   end
   if not loaded then
     failed_id = id
-    return nil, tostring(changed_or_err), id
+    return false, tostring(changed_or_err), id
   end
 
   local removed, remove_err = uv.fs_unlink(path)
@@ -296,7 +296,7 @@ local function load(id)
     else
       failed_id = id
     end
-    return nil, ('cannot remove transcript: %s'):format(remove_err), id
+    return false, ('cannot remove transcript: %s'):format(remove_err), id
   end
 
   failed_id = nil
@@ -305,14 +305,14 @@ end
 
 ---Load a transcript by clip ID, or retry the last failed ID.
 ---@param id? integer
----@return true|nil ok
+---@return boolean ok
 ---@return string|nil err
 function M.load(id)
   local called, result, err, retried_id = pcall(load, id)
   if not called then
     err = tostring(result)
     notify_error(err, id)
-    return nil, err
+    return false, err
   end
   if not result then
     notify_error(err, retried_id)
@@ -324,13 +324,13 @@ end
 
 ---Make this Neovim the explicit target, then load or retry a transcript.
 ---@param id? integer
----@return true|nil ok
+---@return boolean ok
 ---@return string|nil err
 function M.set_target(id)
   local ok, changed_or_err = try_set_target('nvim-target')
   if not ok then
     notify_error(changed_or_err)
-    return nil, tostring(changed_or_err)
+    return false, tostring(changed_or_err)
   end
   if changed_or_err then
     notify('This Neovim is now Talk2text target', vim.log.levels.INFO)
@@ -338,23 +338,9 @@ function M.set_target(id)
   return M.load(id)
 end
 
----Internal RPC adapter used by talk2text-nvim.
----@param id integer
----@return string
-function M._remote_load(id)
-  local called, result, err = pcall(M.load, id)
-  if not called then
-    return 'error:' .. tostring(result)
-  end
-  if result then
-    return 'ok'
-  end
-  return 'error:' .. tostring(err)
-end
-
 ---Internal startup adapter used by talk2text-nvim's default editor.
 ---@param id integer
-function M._default_start(id)
+function M.start_default_target(id)
   local buffer = vim.api.nvim_get_current_buf()
   vim.api.nvim_set_option_value('buftype', 'nofile', { buf = buffer })
   vim.api.nvim_set_option_value('bufhidden', 'wipe', { buf = buffer })

@@ -24,7 +24,7 @@ require("talk2text").setup({
 })
 ```
 
-`setup()` resolves and validates the runtime directory, then confirms that `<runtime_dir>/daemon.sock` accepts a connection. It does not perform a daemon status request. The first runtime directory successfully resolved by `setup()`, `set_target()`, or `load()` remains fixed for the Neovim session. A later `setup()` call for the same directory succeeds without checking the daemon again, but it cannot switch to another directory. On failure, `setup()` emits one error notification inside Neovim and returns `nil, err` without raising another error. Calling `setup()` does not make the current Neovim instance the target. Plugin configuration comes from the user's normal Neovim configuration; the output command does not call `setup()`.
+`setup()` resolves and validates the runtime directory, then confirms that `<runtime_dir>/daemon.sock` accepts a connection. It does not perform a daemon status request. The first runtime directory successfully resolved by `setup()`, `set_target()`, or `load()` remains fixed for the Neovim session. A later `setup()` call for the same directory succeeds without checking the daemon again, but it cannot switch to another directory. On failure, `setup()` emits one error notification inside Neovim and returns `false, err` without raising another error. Calling `setup()` does not make the current Neovim instance the target. Plugin configuration comes from the user's normal Neovim configuration; the output command does not call `setup()`.
 
 # `set_target([id])`
 
@@ -39,7 +39,7 @@ Behavior:
 5. Registers quit-time cleanup that deletes `nvim-target` only when it still points to this same server socket.
 6. Emits an informational notification only when the target actually changes to this server. Repeating `set_target()` in the same target emits no target-switch notification.
 7. Calls `load(id)` after target registration. Target registration happens even when `id` is invalid, so a negative or otherwise invalid ID reports a load error without undoing the switch.
-8. On target-registration failure, emits one error notification inside Neovim and returns `nil, err` without raising another error.
+8. On target-registration failure, emits one error notification inside Neovim and returns `false, err` without raising another error.
 
 Normal Neovim sessions do not become the target unless the user explicitly calls `set_target()`. There is no default keymap. Users may define their own, for example:
 
@@ -59,7 +59,7 @@ Behavior:
 
 1. An integer `id` from 1 through 9007199254740991 reads `<runtime_dir>/transcripts/<id>` using the runtime configured by `setup()` or the normal discovery rules. The upper bound is LuaJIT's maximum safe integer.
 2. `load()`, `load(nil)`, and `load(0)` retry the remembered failed ID. If no ID is remembered, they are successful no-ops.
-3. An ID outside the supported range, a fractional ID, or a nonnumeric ID is invalid. It emits an error notification that includes the supplied ID and returns `nil, err`.
+3. An ID outside the supported range, a fractional ID, or a nonnumeric ID is invalid. It emits an error notification that includes the supplied ID and returns `false, err`.
 4. Leading and trailing transcript whitespace is discarded. An empty transcript is a no-op.
 5. A non-empty transcript is treated as a single word when it contains no whitespace and its final character does not match the Lua punctuation class `%p`. Internal punctuation is allowed, so `well-known` is a word but `unfinished-` is not.
 6. A single-word transcript is inserted on the cursor's current line without splitting the current whitespace-delimited word. If the cursor is within a word, insertion happens after the whole word.
@@ -69,11 +69,11 @@ Behavior:
 10. Other non-empty transcripts are appended to the cursor's current line. An empty current line is replaced directly; otherwise, trailing spaces are normalized and exactly one space separates the existing line from the transcript's first line. Remaining transcript lines are inserted below it, preserving interior blank lines. The cursor then moves to the beginning of the final resulting line.
 11. It removes the source file only after the load or no-op succeeds.
 12. Returns `true` on a successful load or no-op.
-13. Returns `nil, err` on expected failure.
-14. On failure, emits one error notification inside Neovim and returns `nil, err` without raising another error. Transcript-specific notifications include the ID. This applies equally to direct Lua calls, remote command delivery, and default-editor startup.
+13. Returns `false, err` on expected failure.
+14. On failure, emits one error notification inside Neovim and returns `false, err` without raising another error. Transcript-specific notifications include the ID. This applies equally to direct Lua calls, remote command delivery, and default-editor startup.
 15. After a remembered failed ID is retried and loaded successfully, emits an informational notification that includes the ID. A retry with no remembered ID remains a silent successful no-op.
 
-The plugin remembers one failed ID in memory for the current Neovim session. A failed explicit load replaces the remembered ID, a failed retry keeps it, and any successful load clears it. A failed load does not partially change the buffer. If removing the source file fails after text was inserted, the plugin returns `nil, err` without remembering a retry, because retrying could insert the same transcript twice.
+The plugin remembers one failed ID in memory for the current Neovim session. A failed explicit load replaces the remembered ID, a failed retry keeps it, and any successful load clears it. A failed load does not partially change the buffer. If removing the source file fails after text was inserted, the plugin returns `false, err` without remembering a retry, because retrying could insert the same transcript twice.
 
 # Default Editor Startup
 

@@ -108,7 +108,7 @@ func TestNeovimIntegration(t *testing.T) {
 	defaultSetupPath := filepath.Join(transcriptDir, "2")
 	writeFile(t, defaultSetupPath, "")
 	runNvimExpression(t, projectRoot, socket, `execute("enew")`)
-	runNvimExpression(t, projectRoot, socket, `luaeval('require("talk2text")._default_start(2)')`)
+	runNvimExpression(t, projectRoot, socket, `luaeval('require("talk2text").start_default_target(2)')`)
 	writeFile(t, filepath.Join(runtimeDir, targetName), "/tmp/stale-talk2text-nvim.sock\n")
 	runNvimExpression(t, projectRoot, socket, `execute("enew")`)
 	fallbackPath := filepath.Join(transcriptDir, "3")
