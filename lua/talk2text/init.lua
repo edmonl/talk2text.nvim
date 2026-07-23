@@ -269,7 +269,7 @@ local function load(id)
     failed_id = id
     return nil, runtime_err, id
   end
-  local path = ('%s/transcripts/%d.txt'):format(runtime_dir, id)
+  local path = ('%s/transcripts/%d'):format(runtime_dir, id)
 
   local contents, read_err = read_transcript_file(path)
   if contents == nil then

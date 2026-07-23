@@ -87,7 +87,7 @@ func unsetEnvironment(t *testing.T, name string) {
 
 func TestHandleBlank(t *testing.T) {
 	t.Run("removes transcript", func(t *testing.T) {
-		transcript := filepath.Join(t.TempDir(), "transcript.txt")
+		transcript := filepath.Join(t.TempDir(), "transcript")
 		if err := os.WriteFile(transcript, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -99,7 +99,7 @@ func TestHandleBlank(t *testing.T) {
 	})
 
 	t.Run("cleanup is best effort", func(t *testing.T) {
-		transcript := filepath.Join(t.TempDir(), "transcript.txt")
+		transcript := filepath.Join(t.TempDir(), "transcript")
 		if err := os.Mkdir(transcript, 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -119,7 +119,7 @@ func TestHandleBlank(t *testing.T) {
 	})
 
 	t.Run("already absent is already cleaned", func(t *testing.T) {
-		transcript := filepath.Join(t.TempDir(), "transcript.txt")
+		transcript := filepath.Join(t.TempDir(), "transcript")
 		stderr := captureStderr(t, func() {
 			(&Command{transcriptPath: transcript}).HandleBlank()
 		})
@@ -132,7 +132,7 @@ func TestHandleBlank(t *testing.T) {
 func TestHandleShort(t *testing.T) {
 	t.Run("removes transcript and explicit target", func(t *testing.T) {
 		runtimeDir := t.TempDir()
-		transcript := filepath.Join(runtimeDir, "transcript.txt")
+		transcript := filepath.Join(runtimeDir, "transcript")
 		target := filepath.Join(runtimeDir, targetfile.NormalTarget)
 		defaultTarget := filepath.Join(runtimeDir, targetfile.DefaultTarget)
 		for _, path := range []string{transcript, target, defaultTarget} {
@@ -154,7 +154,7 @@ func TestHandleShort(t *testing.T) {
 
 	t.Run("transcript cleanup failure does not prevent target reset", func(t *testing.T) {
 		runtimeDir := t.TempDir()
-		transcript := filepath.Join(runtimeDir, "transcript.txt")
+		transcript := filepath.Join(runtimeDir, "transcript")
 		target := filepath.Join(runtimeDir, targetfile.NormalTarget)
 		if err := os.Mkdir(transcript, 0o700); err != nil {
 			t.Fatal(err)
@@ -178,7 +178,7 @@ func TestHandleShort(t *testing.T) {
 
 	t.Run("target reset failure happens after transcript cleanup", func(t *testing.T) {
 		runtimeDir := t.TempDir()
-		transcript := filepath.Join(runtimeDir, "transcript.txt")
+		transcript := filepath.Join(runtimeDir, "transcript")
 		target := filepath.Join(runtimeDir, targetfile.NormalTarget)
 		if err := os.WriteFile(transcript, nil, 0o600); err != nil {
 			t.Fatal(err)

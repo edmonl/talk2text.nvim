@@ -10,7 +10,7 @@ The output command receives a transcript path from `talk2text`, while the plugin
 
 ## Decision
 
-Use positive clip IDs at the Lua API boundary. The output command continues to accept the daemon-provided path, validates a canonical `<positive-id>.txt` filename, derives the runtime directory and ID, and passes only the ID to Neovim. The plugin constructs `<configured-runtime>/transcripts/<id>.txt`. Internal remote-load and default-start adapters also receive only the ID.
+Use positive clip IDs at the Lua API boundary. The output command continues to accept the daemon-provided path, validates a canonical `<positive-id>` filename, derives the runtime directory and ID, and passes only the ID to Neovim. The plugin constructs `<configured-runtime>/transcripts/<id>`. Internal remote-load and default-start adapters also receive only the ID.
 
 `nil` and `0` mean retry the last failed ID. Invalid IDs are reported inside Neovim. `set_target(id)` claims the target before delegating to `load(id)`, so an invalid ID does not undo a successful target switch.
 

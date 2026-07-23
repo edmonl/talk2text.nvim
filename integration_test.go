@@ -96,7 +96,7 @@ func TestNeovimIntegration(t *testing.T) {
 		return isRegularFile(filepath.Join(runtimeDir, targetName))
 	})
 
-	firstPath := filepath.Join(transcriptDir, "1.txt")
+	firstPath := filepath.Join(transcriptDir, "1")
 	writeFile(t, firstPath, "first line\nsecond line\n")
 	hookEnvironment["TALK2TEXT_NVIM_LAUNCH_CMD"] = ""
 	runOutputCommand(t, projectRoot, hookEnvironment, binary, "text", firstPath)
@@ -105,13 +105,13 @@ func TestNeovimIntegration(t *testing.T) {
 		t.Fatalf("unexpected RPC buffer: %q", loaded)
 	}
 
-	defaultSetupPath := filepath.Join(transcriptDir, "2.txt")
+	defaultSetupPath := filepath.Join(transcriptDir, "2")
 	writeFile(t, defaultSetupPath, "")
 	runNvimExpression(t, projectRoot, socket, `execute("enew")`)
 	runNvimExpression(t, projectRoot, socket, `luaeval('require("talk2text")._default_start(2)')`)
 	writeFile(t, filepath.Join(runtimeDir, targetName), "/tmp/stale-talk2text-nvim.sock\n")
 	runNvimExpression(t, projectRoot, socket, `execute("enew")`)
-	fallbackPath := filepath.Join(transcriptDir, "3.txt")
+	fallbackPath := filepath.Join(transcriptDir, "3")
 	writeFile(t, fallbackPath, "fallback")
 	runOutputCommand(t, projectRoot, hookEnvironment, binary, "text", fallbackPath)
 	assertAbsent(t, filepath.Join(runtimeDir, targetName))
@@ -129,7 +129,7 @@ func TestNeovimIntegration(t *testing.T) {
 	})
 
 	runNvimExpression(t, projectRoot, socket, `execute("setlocal nomodifiable")`)
-	failedPath := filepath.Join(transcriptDir, "4.txt")
+	failedPath := filepath.Join(transcriptDir, "4")
 	writeFile(t, failedPath, "retry me")
 	if output, err := runProcess(projectRoot, integrationEnvironment(hookEnvironment), binary, "text", failedPath); err == nil {
 		t.Fatalf("reachable target load failure returned success; output: %s", output)
@@ -162,7 +162,7 @@ func TestNeovimIntegration(t *testing.T) {
 	if err := os.MkdirAll(startupTranscriptDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	startupPath := filepath.Join(startupTranscriptDir, "1.txt")
+	startupPath := filepath.Join(startupTranscriptDir, "1")
 	startupCWDLog := filepath.Join(testDir, "startup-cwd.log")
 	writeFile(t, startupPath, "started by launch command")
 	startupEnvironment := map[string]string{
@@ -184,7 +184,7 @@ func TestNeovimIntegration(t *testing.T) {
 	if err := os.MkdirAll(directTranscriptDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	directFailurePath := filepath.Join(directTranscriptDir, "2.txt")
+	directFailurePath := filepath.Join(directTranscriptDir, "2")
 	writeFile(t, directFailurePath, "retain after failed direct startup")
 	failedDirectEnvironment := map[string]string{
 		"TALK2TEXT_NVIM_LAUNCH_CMD": `failed_direct_launch() { return 23; }; failed_direct_launch`,

@@ -22,7 +22,7 @@ Supported kinds:
 
 Unknown arguments or invalid invocation exit with a nonzero status. No detailed logging is required because output command logs may be discarded by `talk2text`.
 
-For every kind, the transcript filename must have the canonical form `<positive-id>.txt`, where the ID is a base-10 positive integer without a sign or leading zero. The command derives that ID after validating the path and passes only the ID to Neovim. Runtime selection inside the plugin remains governed by plugin configuration; internal remote-load and default-start adapters do not receive a runtime directory.
+For every kind, the transcript filename must have the canonical form `<positive-id>`, where the ID is a base-10 positive integer without a sign or leading zero. The command derives that ID after validating the path and passes only the ID to Neovim. Runtime selection inside the plugin remains governed by plugin configuration; internal remote-load and default-start adapters do not receive a runtime directory.
 
 Exit status has only two semantic categories:
 

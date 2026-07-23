@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/edmonl/talk2text.nvim/internal/command"
 )
@@ -65,14 +64,9 @@ func parseTranscriptPath(transcriptPath string) (string, int, error) {
 		return "", 0, errors.New("runtime directory is unavailable")
 	}
 
-	value, found := strings.CutSuffix(filename, ".txt")
-	if !found {
-		return "", 0, errors.New("transcript filename must be <positive-id>.txt")
-	}
-
-	id, err := strconv.Atoi(value)
-	if err != nil || id < 1 || strconv.Itoa(id) != value {
-		return "", 0, errors.New("transcript filename must be <positive-id>.txt")
+	id, err := strconv.Atoi(filename)
+	if err != nil || id < 1 || strconv.Itoa(id) != filename {
+		return "", 0, errors.New("transcript filename must be <positive-id>")
 	}
 	return runtimeDir, id, nil
 }

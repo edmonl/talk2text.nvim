@@ -21,7 +21,7 @@ func TestParseTranscriptPathDoesNotResolveSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	transcript := filepath.Join(runtimeDir, "transcripts", "42.txt")
+	transcript := filepath.Join(runtimeDir, "transcripts", "42")
 	gotRuntime, gotID, err := parseTranscriptPath(transcript)
 	if err != nil {
 		t.Fatalf("parseTranscriptPath() error = %s", err)
@@ -40,7 +40,7 @@ func TestParseTranscriptPathAcceptsSpaces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	transcript := filepath.Join(runtimeDir, "transcripts", "42.txt")
+	transcript := filepath.Join(runtimeDir, "transcripts", "42")
 	gotRuntime, gotID, err := parseTranscriptPath(transcript)
 	if err != nil {
 		t.Fatalf("parseTranscriptPath() error = %s", err)
@@ -54,13 +54,13 @@ func TestParseTranscriptPathAcceptsSpaces(t *testing.T) {
 }
 
 func TestParseTranscriptPathRejectsRoot(t *testing.T) {
-	if _, _, err := parseTranscriptPath("/transcripts/1.txt"); err == nil {
+	if _, _, err := parseTranscriptPath("/transcripts/1"); err == nil {
 		t.Fatal("parseTranscriptPath() accepted the filesystem root")
 	}
 }
 
 func TestParseTranscriptPathRejectsInvalidPath(t *testing.T) {
-	for _, path := range []string{"runtime/transcripts/1.txt", "/runtime/transcripts/"} {
+	for _, path := range []string{"runtime/transcripts/1", "/runtime/transcripts/"} {
 		if _, _, err := parseTranscriptPath(path); err == nil || err.Error() != "transcript path must be an absolute file path" {
 			t.Errorf("parseTranscriptPath(%q) error = %s, want absolute-path error", path, err)
 		}
@@ -70,12 +70,13 @@ func TestParseTranscriptPathRejectsInvalidPath(t *testing.T) {
 func TestParseTranscriptPathRejectsMalformedNames(t *testing.T) {
 	runtimeDir := t.TempDir()
 	for _, filename := range []string{
-		"0.txt",
-		"-1.txt",
-		"01.txt",
-		"one.txt",
+		"0",
+		"-1",
+		"01",
+		"one",
+		"1.txt",
 		"1.log",
-		strconv.FormatUint(uint64(^uint(0)>>1)+1, 10) + ".txt",
+		strconv.FormatUint(uint64(^uint(0)>>1)+1, 10),
 	} {
 		path := filepath.Join(runtimeDir, "transcripts", filename)
 		if _, _, err := parseTranscriptPath(path); err == nil {
