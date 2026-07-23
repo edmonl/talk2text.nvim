@@ -151,7 +151,7 @@ func dialNvim(address string) (*nvim.Nvim, error) {
 		nvim.DialNetDial(func(ctx context.Context, _ string, address string) (net.Conn, error) {
 			return dialer.DialContext(ctx, "unix", address)
 		}),
-		nvim.DialLogf(func(string, ...interface{}) {}),
+		nvim.DialLogf(func(string, ...any) {}),
 	)
 }
 
