@@ -185,7 +185,7 @@ func (c *Command) HandleShort() error {
 
 func (c *Command) removeTranscript() {
 	if err := util.RemovePath(c.transcriptPath); err != nil {
-		fmt.Fprintf(os.Stderr, "talk2text-nvim: cannot remove transcript %s: %s\n", c.transcriptPath, err)
+		fmt.Fprintf(os.Stderr, "talk2text-nvim: cannot remove transcript %s: %v\n", c.transcriptPath, err)
 	}
 }
 
@@ -205,7 +205,7 @@ func (c *Command) notify(message string) {
 		err = util.RunCmdDetached(shell, commandArgs...)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "talk2text-nvim: cannot start notification command: %s\n", err)
+		fmt.Fprintf(os.Stderr, "talk2text-nvim: cannot start notification command: %v\n", err)
 	}
 }
 
@@ -219,7 +219,7 @@ func (c *Command) focusDefault() {
 		err = util.RunCmdDetached(shell, "-c", c.focusCmd)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "talk2text-nvim: cannot start focus command: %s\n", err)
+		fmt.Fprintf(os.Stderr, "talk2text-nvim: cannot start focus command: %v\n", err)
 	}
 }
 

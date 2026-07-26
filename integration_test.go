@@ -210,7 +210,7 @@ func runSuccessfulProcess(t *testing.T, directory string, environment []string, 
 	t.Helper()
 	output, err := runProcess(directory, environment, name, args...)
 	if err != nil {
-		t.Fatalf("%s %s failed: %s\n%s", name, strings.Join(args, " "), err, output)
+		t.Fatalf("%s %s failed: %v\n%s", name, strings.Join(args, " "), err, output)
 	}
 	return output
 }
@@ -306,13 +306,13 @@ func firstLine(t *testing.T, path string) string {
 func assertExists(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Lstat(path); err != nil {
-		t.Fatalf("expected %s to exist: %s", path, err)
+		t.Fatalf("expected %s to exist: %v", path, err)
 	}
 }
 
 func assertAbsent(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Lstat(path); !os.IsNotExist(err) {
-		t.Fatalf("expected %s to be absent; stat error: %s", path, err)
+		t.Fatalf("expected %s to be absent; stat error: %v", path, err)
 	}
 }

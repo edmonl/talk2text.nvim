@@ -112,7 +112,7 @@ func TestHandleBlank(t *testing.T) {
 
 		(&Command{transcriptPath: transcript}).HandleBlank()
 		if _, err := os.Lstat(transcript); !os.IsNotExist(err) {
-			t.Fatalf("blank transcript was not removed: %s", err)
+			t.Fatalf("blank transcript was not removed: %v", err)
 		}
 	})
 
@@ -132,7 +132,7 @@ func TestHandleBlank(t *testing.T) {
 			t.Fatalf("stderr = %q, want transcript cleanup failure", stderr)
 		}
 		if info, err := os.Stat(transcript); err != nil || !info.IsDir() {
-			t.Fatalf("transcript directory was removed or changed: %s", err)
+			t.Fatalf("transcript directory was removed or changed: %v", err)
 		}
 	})
 
@@ -160,13 +160,13 @@ func TestHandleShort(t *testing.T) {
 		}
 
 		if err := (&Command{runtimeDir: runtimeDir, transcriptPath: transcript}).HandleShort(); err != nil {
-			t.Fatalf("HandleShort() error = %s", err)
+			t.Fatalf("HandleShort() error = %v", err)
 		}
 		if _, err := os.Lstat(target); !os.IsNotExist(err) {
-			t.Fatalf("explicit target was not removed: %s", err)
+			t.Fatalf("explicit target was not removed: %v", err)
 		}
 		if _, err := os.Stat(defaultTarget); err != nil {
-			t.Fatalf("default target was changed: %s", err)
+			t.Fatalf("default target was changed: %v", err)
 		}
 	})
 
@@ -186,11 +186,11 @@ func TestHandleShort(t *testing.T) {
 
 		captureStderr(t, func() {
 			if err := (&Command{runtimeDir: runtimeDir, transcriptPath: transcript}).HandleShort(); err != nil {
-				t.Fatalf("HandleShort() error = %s", err)
+				t.Fatalf("HandleShort() error = %v", err)
 			}
 		})
 		if _, err := os.Lstat(target); !os.IsNotExist(err) {
-			t.Fatalf("target was not reset after transcript cleanup failure: %s", err)
+			t.Fatalf("target was not reset after transcript cleanup failure: %v", err)
 		}
 	})
 
@@ -212,10 +212,10 @@ func TestHandleShort(t *testing.T) {
 			t.Fatal("HandleShort() succeeded after target reset failure")
 		}
 		if _, err := os.Lstat(transcript); !os.IsNotExist(err) {
-			t.Fatalf("transcript was not removed before target reset failed: %s", err)
+			t.Fatalf("transcript was not removed before target reset failed: %v", err)
 		}
 		if info, err := os.Stat(target); err != nil || !info.IsDir() {
-			t.Fatalf("target directory was removed or changed: %s", err)
+			t.Fatalf("target directory was removed or changed: %v", err)
 		}
 	})
 }
@@ -226,7 +226,7 @@ func TestDefaultEditorInvocation(t *testing.T) {
 		cmd.Env = append(os.Environ(), "TALK2TEXT_NVIM_TEST_DEFAULT_EDITOR=1")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			t.Fatalf("launchDefault() process error = %s: %s", err, output)
+			t.Fatalf("launchDefault() process error = %v: %s", err, output)
 		}
 		gotArgs := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
 		wantArgs := []string{"/tmp/runtime with spaces/transcripts/3"}
@@ -237,7 +237,7 @@ func TestDefaultEditorInvocation(t *testing.T) {
 
 	t.Run("requires a launch command", func(t *testing.T) {
 		if err := (&Command{}).launchDefault(); err == nil || !strings.Contains(err.Error(), "TALK2TEXT_NVIM_LAUNCH_CMD") {
-			t.Fatalf("empty launch command error = %s, want required-setting error", err)
+			t.Fatalf("empty launch command error = %v, want required-setting error", err)
 		}
 	})
 }
@@ -258,7 +258,7 @@ func TestShellPathIsCached(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestShellPathCacheHelper$")
 	cmd.Env = append(os.Environ(), "TALK2TEXT_NVIM_TEST_SHELL_CACHE=1")
 	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("shell cache process error = %s: %s", err, output)
+		t.Fatalf("shell cache process error = %v: %s", err, output)
 	}
 }
 
@@ -290,13 +290,13 @@ func TestReadTargetTreatsZeroByteTargetAsMissing(t *testing.T) {
 
 	value, err := targetfile.Read(runtimeDir, targetfile.NormalTarget)
 	if err != nil {
-		t.Fatalf("target.Read() error = %s", err)
+		t.Fatalf("target.Read() error = %v", err)
 	}
 	if value != "" {
 		t.Fatalf("target.Read() = %q, want empty", value)
 	}
 	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("zero-byte target was removed: %s", err)
+		t.Fatalf("zero-byte target was removed: %v", err)
 	}
 }
 
@@ -309,10 +309,10 @@ func TestTryTargetRejectsRelativeAddress(t *testing.T) {
 
 	result, err := (&Command{runtimeDir: runtimeDir}).tryTarget(targetfile.NormalTarget)
 	if result != targetFatal || err == nil || !strings.Contains(err.Error(), "must be absolute") {
-		t.Fatalf("tryTarget() = %d, %s, want fatal absolute-path error", result, err)
+		t.Fatalf("tryTarget() = %d, %v, want fatal absolute-path error", result, err)
 	}
 	if _, statErr := os.Lstat(path); !os.IsNotExist(statErr) {
-		t.Fatalf("relative target was not removed: %s", statErr)
+		t.Fatalf("relative target was not removed: %v", statErr)
 	}
 }
 
@@ -323,7 +323,7 @@ func TestDetachedHookStartErrorsAreReported(t *testing.T) {
 			cmd.Env = append(os.Environ(), "PATH="+t.TempDir(), "TALK2TEXT_NVIM_TEST_HOOK="+name)
 			contents, err := cmd.CombinedOutput()
 			if err != nil {
-				t.Fatalf("hook process error = %s: %s", err, contents)
+				t.Fatalf("hook process error = %v: %s", err, contents)
 			}
 			want := "cannot start " + name + " command:"
 			if !strings.Contains(string(contents), want) {

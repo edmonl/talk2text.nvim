@@ -10,7 +10,7 @@ func TestReadTarget(t *testing.T) {
 	t.Run("reports missing path as absent", func(t *testing.T) {
 		value, err := readTarget(filepath.Join(t.TempDir(), "missing"))
 		if err != nil {
-			t.Fatalf("readTarget() error = %s", err)
+			t.Fatalf("readTarget() error = %v", err)
 		}
 		if value != "" {
 			t.Fatalf("readTarget() = %q, want empty", value)
@@ -25,7 +25,7 @@ func TestReadTarget(t *testing.T) {
 
 		value, err := readTarget(path)
 		if err != nil {
-			t.Fatalf("readTarget() error = %s", err)
+			t.Fatalf("readTarget() error = %v", err)
 		}
 		if value != "socket" {
 			t.Fatalf("readTarget() = %q, want socket", value)
@@ -40,10 +40,10 @@ func TestReadTarget(t *testing.T) {
 
 		value, err := readTarget(path)
 		if err == nil || value != "" {
-			t.Fatalf("readTarget() = %q, %s, want empty and error", value, err)
+			t.Fatalf("readTarget() = %q, %v, want empty and error", value, err)
 		}
 		if _, statErr := os.Lstat(path); !os.IsNotExist(statErr) {
-			t.Fatalf("invalid target was not removed: %s", statErr)
+			t.Fatalf("invalid target was not removed: %v", statErr)
 		}
 	})
 
@@ -51,10 +51,10 @@ func TestReadTarget(t *testing.T) {
 		path := t.TempDir()
 		value, err := readTarget(path)
 		if err == nil || value != "" {
-			t.Fatalf("readTarget() = %q, %s, want empty and error", value, err)
+			t.Fatalf("readTarget() = %q, %v, want empty and error", value, err)
 		}
 		if _, statErr := os.Lstat(path); !os.IsNotExist(statErr) {
-			t.Fatalf("invalid target directory was not removed: %s", statErr)
+			t.Fatalf("invalid target directory was not removed: %v", statErr)
 		}
 	})
 }
@@ -69,14 +69,14 @@ func TestDeletePreservesReplacement(t *testing.T) {
 
 	removed, err := Delete(runtimeDir, NormalTarget, "/tmp/stale.sock")
 	if err != nil {
-		t.Fatalf("Delete() error = %s", err)
+		t.Fatalf("Delete() error = %v", err)
 	}
 	if removed {
 		t.Fatal("Delete() removed a replacement target")
 	}
 	value, err := readTarget(path)
 	if err != nil {
-		t.Fatalf("readTarget() error = %s", err)
+		t.Fatalf("readTarget() error = %v", err)
 	}
 	if value != replacement {
 		t.Fatalf("replacement target = %q, want %q", value, replacement)

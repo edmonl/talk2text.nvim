@@ -13,10 +13,10 @@ func TestRemovePath(t *testing.T) {
 	}
 
 	if err := RemovePath(path); err != nil {
-		t.Fatalf("RemovePath() error = %s", err)
+		t.Fatalf("RemovePath() error = %v", err)
 	}
 	if err := RemovePath(path); err != nil {
-		t.Fatalf("RemovePath() missing-path error = %s", err)
+		t.Fatalf("RemovePath() missing-path error = %v", err)
 	}
 }
 

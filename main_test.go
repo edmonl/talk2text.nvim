@@ -24,7 +24,7 @@ func TestParseTranscriptPathDoesNotResolveSymlink(t *testing.T) {
 	transcript := filepath.Join(runtimeDir, "transcripts", "42")
 	gotRuntime, gotID, err := parseTranscriptPath(transcript)
 	if err != nil {
-		t.Fatalf("parseTranscriptPath() error = %s", err)
+		t.Fatalf("parseTranscriptPath() error = %v", err)
 	}
 	if gotRuntime != runtimeDir {
 		t.Fatalf("parseTranscriptPath() runtime directory = %q, want symlink path %q", gotRuntime, runtimeDir)
@@ -43,7 +43,7 @@ func TestParseTranscriptPathAcceptsSpaces(t *testing.T) {
 	transcript := filepath.Join(runtimeDir, "transcripts", "42")
 	gotRuntime, gotID, err := parseTranscriptPath(transcript)
 	if err != nil {
-		t.Fatalf("parseTranscriptPath() error = %s", err)
+		t.Fatalf("parseTranscriptPath() error = %v", err)
 	}
 	if gotRuntime != runtimeDir {
 		t.Fatalf("parseTranscriptPath() runtime directory = %q, want %q", gotRuntime, runtimeDir)
@@ -62,7 +62,7 @@ func TestParseTranscriptPathRejectsRoot(t *testing.T) {
 func TestParseTranscriptPathRejectsInvalidPath(t *testing.T) {
 	for _, path := range []string{"runtime/transcripts/1", "/runtime/transcripts/"} {
 		if _, _, err := parseTranscriptPath(path); err == nil || err.Error() != "transcript path must be an absolute file path" {
-			t.Errorf("parseTranscriptPath(%q) error = %s, want absolute-path error", path, err)
+			t.Errorf("parseTranscriptPath(%q) error = %v, want absolute-path error", path, err)
 		}
 	}
 }

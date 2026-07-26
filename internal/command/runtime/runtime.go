@@ -43,7 +43,7 @@ func Lock(runtimeDir string) (*os.File, error) {
 // It reports failures to release the lock to standard error.
 func Unlock(dir *os.File) {
 	if err := syscall.Flock(int(dir.Fd()), syscall.LOCK_UN); err != nil {
-		fmt.Fprintf(os.Stderr, "talk2text-nvim: cannot unlock runtime directory: %s\n", err)
+		fmt.Fprintf(os.Stderr, "talk2text-nvim: cannot unlock runtime directory: %v\n", err)
 	}
 	dir.Close()
 }

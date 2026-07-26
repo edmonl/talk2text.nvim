@@ -9,7 +9,7 @@ import (
 func TestWithLockRunsCallback(t *testing.T) {
 	want := errors.New("callback error")
 	if err := WithLock(t.TempDir(), func() error { return want }); !errors.Is(err, want) {
-		t.Fatalf("WithLock() error = %s, want callback error", err)
+		t.Fatalf("WithLock() error = %v, want callback error", err)
 	}
 }
 

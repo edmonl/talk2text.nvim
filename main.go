@@ -12,7 +12,7 @@ import (
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "talk2text-nvim: %s\n", err)
+		fmt.Fprintf(os.Stderr, "talk2text-nvim: %v\n", err)
 		os.Exit(1)
 	}
 }
