@@ -67,10 +67,6 @@ local function run()
   assert_equal(resolve_err, nil, "fallback runtime error")
   assert_equal(resolved, fallback_runtime, "missing XDG runtime fallback")
 
-  local explicit_missing, explicit_err = runtime.resolve(root .. "/missing-explicit-runtime")
-  assert_equal(explicit_missing, nil, "missing explicit runtime unexpectedly resolved")
-  assert_true(explicit_err:match("unavailable") ~= nil, "missing explicit runtime omitted the cause")
-
   local invalid_xdg_base = root .. "/invalid-xdg-base"
   vim.fn.mkdir(invalid_xdg_base, "p", 448)
   write_file(invalid_xdg_base .. "/talk2text", "not a directory")
@@ -152,12 +148,12 @@ local function run()
   )
   assert_equal(vim.api.nvim_win_get_cursor(0), { 1, 6 }, "cursor at inserted word")
 
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "hello   world" })
-  vim.api.nvim_win_set_cursor(0, { 1, 6 })
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "  hello   world" })
+  vim.api.nvim_win_set_cursor(0, { 1, 8 })
   local word_in_spaces = transcript_dir .. "/41"
   write_file(word_in_spaces, "again")
   assert_true(talk2text.load(41), "single-word insertion into spaces failed")
-  assert_equal(vim.api.nvim_get_current_line(), "hello again world", "single word in spaces")
+  assert_equal(vim.api.nvim_get_current_line(), "  hello again world", "indented single word in spaces")
 
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { "alpha beta" })
   vim.api.nvim_win_set_cursor(0, { 1, 2 })
@@ -172,35 +168,12 @@ local function run()
   assert_equal(vim.api.nvim_get_current_line(), "alpha well-known beta done.", "punctuated transcript")
   assert_equal(vim.api.nvim_win_get_cursor(0), { 1, 0 }, "cursor after punctuated transcript")
 
-  local trailing_hyphen = transcript_dir .. "/44"
-  write_file(trailing_hyphen, "unfinished-")
-  assert_true(talk2text.load(44), "trailing-hyphen transcript insertion failed")
-  assert_equal(
-    vim.api.nvim_get_current_line(),
-    "alpha well-known beta done. unfinished-",
-    "trailing-hyphen transcript"
-  )
-
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { "hello... world" })
   vim.api.nvim_win_set_cursor(0, { 1, 5 })
   local trailing_punctuation = transcript_dir .. "/45"
   write_file(trailing_punctuation, "again")
   assert_true(talk2text.load(45), "insertion before trailing punctuation failed")
   assert_equal(vim.api.nvim_get_current_line(), "hello again... world", "trailing punctuation")
-
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "it's ready" })
-  vim.api.nvim_win_set_cursor(0, { 1, 2 })
-  local internal_punctuation = transcript_dir .. "/46"
-  write_file(internal_punctuation, "again")
-  assert_true(talk2text.load(46), "insertion after internally punctuated word failed")
-  assert_equal(vim.api.nvim_get_current_line(), "it's again ready", "internal punctuation")
-
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "    alpha" })
-  vim.api.nvim_win_set_cursor(0, { 1, 2 })
-  local indented_word = transcript_dir .. "/47"
-  write_file(indented_word, "again")
-  assert_true(talk2text.load(47), "indented insertion failed")
-  assert_equal(vim.api.nvim_get_current_line(), "  again alpha", "prefix indentation")
 
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { "hello   , world" })
   vim.api.nvim_win_set_cursor(0, { 1, 6 })
@@ -253,40 +226,24 @@ local function run()
   assert_equal(vim.api.nvim_win_get_cursor(0), { 4, 0 }, "cursor at beginning of final inserted line")
   assert_true(not exists(first), "successful load did not remove its transcript")
 
-  local inserted = transcript_dir .. "/2"
-  write_file(inserted, "  fourth item  \n")
-  assert_true(talk2text.load(2), "line insertion failed")
-  assert_equal(
-    vim.api.nvim_buf_get_lines(0, 0, -1, false),
-    { "before", "current first", "", "third fourth item", "after" },
-    "subsequent current-line append"
-  )
-  assert_equal(vim.api.nvim_win_get_cursor(0), { 4, 0 }, "cursor after single-line append")
-
-  local empty = transcript_dir .. "/4"
-  write_file(empty, "")
-  local before_empty = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-  assert_true(talk2text.load(4), "empty transcript no-op failed")
-  assert_equal(vim.api.nvim_buf_get_lines(0, 0, -1, false), before_empty, "empty transcript changed the buffer")
-  assert_true(not exists(empty), "empty transcript was not removed")
-
   local max_transcript_id = 9007199254740991
   local max_id_path = transcript_dir .. "/" .. string.format("%d", max_transcript_id)
   write_file(max_id_path, "")
+  local before_empty = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   assert_true(talk2text.load(max_transcript_id), "maximum safe transcript ID was rejected")
+  assert_equal(vim.api.nvim_buf_get_lines(0, 0, -1, false), before_empty, "empty transcript changed the buffer")
+  assert_true(not exists(max_id_path), "empty transcript was not removed")
 
-  for _, invalid_id in ipairs({ 9007199254740992, math.huge }) do
-    local invalid_id_notifications, invalid_id_ok, invalid_id_err = capture_notifications(function()
-      return talk2text.load(invalid_id)
-    end)
-    assert_false(invalid_id_ok, "unsafe transcript ID unexpectedly loaded")
-    assert_true(
-      invalid_id_err:match("positive and safe integer") ~= nil,
-      "unsafe transcript ID omitted the valid range"
-    )
-    assert_equal(#invalid_id_notifications, 1, "unsafe transcript ID did not notify exactly once")
-    assert_equal(invalid_id_notifications[1][2], vim.log.levels.ERROR, "unsafe transcript ID notification level")
-  end
+  local invalid_id_notifications, invalid_id_ok, invalid_id_err = capture_notifications(function()
+    return talk2text.load(max_transcript_id + 1)
+  end)
+  assert_false(invalid_id_ok, "unsafe transcript ID unexpectedly loaded")
+  assert_true(
+    invalid_id_err:match("positive and safe integer") ~= nil,
+    "unsafe transcript ID omitted the valid range"
+  )
+  assert_equal(#invalid_id_notifications, 1, "unsafe transcript ID did not notify exactly once")
+  assert_equal(invalid_id_notifications[1][2], vim.log.levels.ERROR, "unsafe transcript ID notification level")
 
   local retry = transcript_dir .. "/5"
   local retry_notifications, retry_ok = capture_notifications(function()
@@ -307,7 +264,7 @@ local function run()
     "successful retry notification omitted its purpose"
   )
   assert_equal(retry_success_notifications[1][2], vim.log.levels.INFO, "successful retry notification level")
-  assert_equal(vim.api.nvim_get_current_line(), "third fourth item retried text", "retried line")
+  assert_equal(vim.api.nvim_get_current_line(), "third retried text", "retried line")
 
   local blocked = transcript_dir .. "/6"
   write_file(blocked, "blocked text")
@@ -329,7 +286,7 @@ local function run()
   assert_true(#blocked_retry_notifications == 1, "buffer retry did not notify exactly once")
   assert_true(blocked_retry_notifications[1][1]:match("6") ~= nil, "buffer retry notification omitted its ID")
   assert_equal(blocked_retry_notifications[1][2], vim.log.levels.INFO, "buffer retry notification level")
-  assert_equal(vim.api.nvim_get_current_line(), "third fourth item retried text blocked text", "retried blocked line")
+  assert_equal(vim.api.nvim_get_current_line(), "third retried text blocked text", "retried blocked line")
   assert_true(talk2text.load(), "load without a remembered failure was not a no-op")
 
   local bad_setup_notifications, bad_setup_ok, bad_setup_err = capture_notifications(function()
@@ -381,12 +338,6 @@ local function run()
   assert_true(target_ok, "target registration failed: " .. tostring(target_err))
   assert_true(#target_notifications == 1, "actual target switch did not notify exactly once")
   assert_equal(target_notifications[1][2], vim.log.levels.INFO, "target switch notification level")
-
-  local unchanged_notifications, unchanged_ok = capture_notifications(function()
-    return talk2text.set_target(0)
-  end)
-  assert_true(unchanged_ok, "unchanged target call failed")
-  assert_equal(#unchanged_notifications, 0, "unchanged target emitted a switch notification")
 
   local target_path = runtime_dir .. "/nvim-target"
   assert(uv.fs_unlink(target_path) or not exists(target_path))

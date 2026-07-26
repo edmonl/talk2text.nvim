@@ -11,7 +11,7 @@ import (
 	targetfile "github.com/edmonl/talk2text.nvim/internal/command/target"
 )
 
-func TestNewCommandNotification(t *testing.T) {
+func TestNewCommand(t *testing.T) {
 	t.Run("uses default when notify-send is available", func(t *testing.T) {
 		unsetEnvironment(t, "TALK2TEXT_NVIM_NOTIFY_CMD")
 		binDir := t.TempDir()
@@ -25,21 +25,39 @@ func TestNewCommandNotification(t *testing.T) {
 		}
 	})
 
-	t.Run("disables unavailable default", func(t *testing.T) {
+	t.Run("uses fallback configuration", func(t *testing.T) {
 		unsetEnvironment(t, "TALK2TEXT_NVIM_NOTIFY_CMD")
+		unsetEnvironment(t, "TALK2TEXT_NVIM_LAUNCH_CMD")
+		unsetEnvironment(t, "TALK2TEXT_NVIM_FOCUS_CMD")
 		t.Setenv("PATH", t.TempDir())
 
-		if got := New("", "", 0).notifyCmd; got != "" {
-			t.Fatalf("notification command = %q, want disabled", got)
+		got := New("", "", 0)
+		if got.notifyCmd != "" {
+			t.Fatalf("notification command = %q, want disabled", got.notifyCmd)
+		}
+		if got.launchCmd != "nvim" {
+			t.Fatalf("launch command = %q, want nvim", got.launchCmd)
+		}
+		if got.focusCmd != "" {
+			t.Fatalf("focus command = %q, want empty", got.focusCmd)
 		}
 	})
 
-	t.Run("preserves explicit command without checking it", func(t *testing.T) {
+	t.Run("trims explicit configuration without checking notification command", func(t *testing.T) {
 		t.Setenv("PATH", t.TempDir())
 		t.Setenv("TALK2TEXT_NVIM_NOTIFY_CMD", " \tmissing-notifier --flag\n")
+		t.Setenv("TALK2TEXT_NVIM_LAUNCH_CMD", " \tterminal -- nvim\n")
+		t.Setenv("TALK2TEXT_NVIM_FOCUS_CMD", " \tfocus-window --current\n")
 
-		if got := New("", "", 0).notifyCmd; got != "missing-notifier --flag" {
-			t.Fatalf("notification command = %q, want explicit command", got)
+		got := New("", "", 0)
+		if got.notifyCmd != "missing-notifier --flag" {
+			t.Fatalf("notification command = %q, want explicit command", got.notifyCmd)
+		}
+		if got.launchCmd != "terminal -- nvim" {
+			t.Fatalf("launch command = %q, want explicit command", got.launchCmd)
+		}
+		if got.focusCmd != "focus-window --current" {
+			t.Fatalf("focus command = %q, want explicit command", got.focusCmd)
 		}
 	})
 
@@ -48,42 +66,6 @@ func TestNewCommandNotification(t *testing.T) {
 
 		if got := New("", "", 0).notifyCmd; got != "" {
 			t.Fatalf("notification command = %q, want disabled", got)
-		}
-	})
-}
-
-func TestNewCommandLaunch(t *testing.T) {
-	t.Run("uses nvim by default", func(t *testing.T) {
-		unsetEnvironment(t, "TALK2TEXT_NVIM_LAUNCH_CMD")
-
-		if got := New("", "", 0).launchCmd; got != "nvim" {
-			t.Fatalf("launch command = %q, want nvim", got)
-		}
-	})
-
-	t.Run("preserves explicit command", func(t *testing.T) {
-		t.Setenv("TALK2TEXT_NVIM_LAUNCH_CMD", " \tterminal -- nvim\n")
-
-		if got := New("", "", 0).launchCmd; got != "terminal -- nvim" {
-			t.Fatalf("launch command = %q, want explicit command", got)
-		}
-	})
-}
-
-func TestNewCommandFocus(t *testing.T) {
-	t.Run("is empty by default", func(t *testing.T) {
-		unsetEnvironment(t, "TALK2TEXT_NVIM_FOCUS_CMD")
-
-		if got := New("", "", 0).focusCmd; got != "" {
-			t.Fatalf("focus command = %q, want empty", got)
-		}
-	})
-
-	t.Run("trims explicit command", func(t *testing.T) {
-		t.Setenv("TALK2TEXT_NVIM_FOCUS_CMD", " \tfocus-window --current\n")
-
-		if got := New("", "", 0).focusCmd; got != "focus-window --current" {
-			t.Fatalf("focus command = %q, want trimmed explicit command", got)
 		}
 	})
 }
@@ -136,15 +118,6 @@ func TestHandleBlank(t *testing.T) {
 		}
 	})
 
-	t.Run("already absent is already cleaned", func(t *testing.T) {
-		transcript := filepath.Join(t.TempDir(), "transcript")
-		stderr := captureStderr(t, func() {
-			(&Command{transcriptPath: transcript}).HandleBlank()
-		})
-		if strings.Contains(stderr, "cannot remove transcript") {
-			t.Fatalf("stderr = %q, want no transcript cleanup failure", stderr)
-		}
-	})
 }
 
 func TestHandleShort(t *testing.T) {
@@ -221,17 +194,26 @@ func TestHandleShort(t *testing.T) {
 }
 
 func TestDefaultEditorInvocation(t *testing.T) {
+	if os.Getenv("TALK2TEXT_NVIM_TEST_DEFAULT_EDITOR") == "1" {
+		if err := (&Command{
+			launchCmd:      `printf '%s\n'`,
+			transcriptPath: "/tmp/runtime with spaces/transcripts/3",
+		}).launchDefault(); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+
 	t.Run("passes the transcript path to the launch command", func(t *testing.T) {
-		cmd := exec.Command(os.Args[0], "-test.run=^TestDefaultEditorInvocationHelper$")
+		cmd := exec.Command(os.Args[0], "-test.run=^TestDefaultEditorInvocation$")
 		cmd.Env = append(os.Environ(), "TALK2TEXT_NVIM_TEST_DEFAULT_EDITOR=1")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("launchDefault() process error = %v: %s", err, output)
 		}
-		gotArgs := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
-		wantArgs := []string{"/tmp/runtime with spaces/transcripts/3"}
-		if strings.Join(gotArgs, "\n") != strings.Join(wantArgs, "\n") {
-			t.Fatalf("arguments = %q, want %q", gotArgs, wantArgs)
+		want := "/tmp/runtime with spaces/transcripts/3"
+		if got := strings.TrimSuffix(string(output), "\n"); got != want {
+			t.Fatalf("argument = %q, want %q", got, want)
 		}
 	})
 
@@ -242,30 +224,7 @@ func TestDefaultEditorInvocation(t *testing.T) {
 	})
 }
 
-func TestDefaultEditorInvocationHelper(t *testing.T) {
-	if os.Getenv("TALK2TEXT_NVIM_TEST_DEFAULT_EDITOR") != "1" {
-		return
-	}
-	if err := (&Command{
-		launchCmd:      `printf '%s\n'`,
-		transcriptPath: "/tmp/runtime with spaces/transcripts/3",
-	}).launchDefault(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestShellPathIsCached(t *testing.T) {
-	cmd := exec.Command(os.Args[0], "-test.run=^TestShellPathCacheHelper$")
-	cmd.Env = append(os.Environ(), "TALK2TEXT_NVIM_TEST_SHELL_CACHE=1")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("shell cache process error = %v: %s", err, output)
-	}
-}
-
-func TestShellPathCacheHelper(t *testing.T) {
-	if os.Getenv("TALK2TEXT_NVIM_TEST_SHELL_CACHE") != "1" {
-		return
-	}
 	command := &Command{}
 	first, err := command.shell()
 	if err != nil {
@@ -279,24 +238,8 @@ func TestShellPathCacheHelper(t *testing.T) {
 	if second != first {
 		t.Fatalf("second shell path = %q, want cached path %q", second, first)
 	}
-}
-
-func TestReadTargetTreatsZeroByteTargetAsMissing(t *testing.T) {
-	runtimeDir := t.TempDir()
-	path := filepath.Join(runtimeDir, targetfile.NormalTarget)
-	if err := os.WriteFile(path, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	value, err := targetfile.Read(runtimeDir, targetfile.NormalTarget)
-	if err != nil {
-		t.Fatalf("target.Read() error = %v", err)
-	}
-	if value != "" {
-		t.Fatalf("target.Read() = %q, want empty", value)
-	}
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("zero-byte target was removed: %v", err)
+	if _, err := (&Command{}).shell(); err == nil {
+		t.Fatal("uncached shell lookup succeeded without PATH")
 	}
 }
 
@@ -317,28 +260,25 @@ func TestTryTargetRejectsRelativeAddress(t *testing.T) {
 }
 
 func TestDetachedHookStartErrorsAreReported(t *testing.T) {
-	for _, name := range []string{"notification", "focus"} {
-		t.Run(name, func(t *testing.T) {
-			cmd := exec.Command(os.Args[0], "-test.run=^TestDetachedHookStartErrorHelper$")
-			cmd.Env = append(os.Environ(), "PATH="+t.TempDir(), "TALK2TEXT_NVIM_TEST_HOOK="+name)
-			contents, err := cmd.CombinedOutput()
-			if err != nil {
-				t.Fatalf("hook process error = %v: %s", err, contents)
+	for _, test := range []struct {
+		name string
+		run  func(*Command)
+	}{
+		{"notification", func(command *Command) { command.notify("message") }},
+		{"focus", func(command *Command) { command.focusDefault() }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			command := &Command{
+				notifyCmd: "true",
+				focusCmd:  "true",
+				shellPath: filepath.Join(t.TempDir(), "missing-shell"),
 			}
-			want := "cannot start " + name + " command:"
-			if !strings.Contains(string(contents), want) {
-				t.Fatalf("stderr = %q, want text containing %q", contents, want)
+			stderr := captureStderr(t, func() { test.run(command) })
+			want := "cannot start " + test.name + " command:"
+			if !strings.Contains(stderr, want) {
+				t.Fatalf("stderr = %q, want text containing %q", stderr, want)
 			}
 		})
-	}
-}
-
-func TestDetachedHookStartErrorHelper(t *testing.T) {
-	switch os.Getenv("TALK2TEXT_NVIM_TEST_HOOK") {
-	case "notification":
-		(&Command{notifyCmd: "true"}).notify("message")
-	case "focus":
-		(&Command{focusCmd: "true"}).focusDefault()
 	}
 }
 

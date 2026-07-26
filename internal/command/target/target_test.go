@@ -32,6 +32,25 @@ func TestReadTarget(t *testing.T) {
 		}
 	})
 
+	t.Run("preserves a zero-byte target as not yet published", func(t *testing.T) {
+		runtimeDir := t.TempDir()
+		path := filepath.Join(runtimeDir, NormalTarget)
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		value, err := Read(runtimeDir, NormalTarget)
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if value != "" {
+			t.Fatalf("Read() = %q, want empty", value)
+		}
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("zero-byte target was removed: %v", err)
+		}
+	})
+
 	t.Run("deletes nonempty target with blank first line", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "target")
 		if err := os.WriteFile(path, []byte("\nignored"), 0o600); err != nil {
@@ -74,11 +93,11 @@ func TestDeletePreservesReplacement(t *testing.T) {
 	if removed {
 		t.Fatal("Delete() removed a replacement target")
 	}
-	value, err := readTarget(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("readTarget() error = %v", err)
+		t.Fatalf("read replacement target: %v", err)
 	}
-	if value != replacement {
-		t.Fatalf("replacement target = %q, want %q", value, replacement)
+	if value := string(contents); value != replacement+"\n" {
+		t.Fatalf("replacement target = %q, want %q", value, replacement+"\n")
 	}
 }

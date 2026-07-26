@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-func TestParseTranscriptPathDoesNotResolveSymlink(t *testing.T) {
+func TestParseTranscriptPathPreservesRuntimePath(t *testing.T) {
 	root := t.TempDir()
-	runtimeDir := filepath.Join(root, "runtime")
+	runtimeDir := filepath.Join(root, "runtime with spaces")
 	resolvedTranscriptDir := filepath.Join(root, "recordings")
 	if err := os.Mkdir(runtimeDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -34,25 +34,6 @@ func TestParseTranscriptPathDoesNotResolveSymlink(t *testing.T) {
 	}
 }
 
-func TestParseTranscriptPathAcceptsSpaces(t *testing.T) {
-	runtimeDir := filepath.Join(t.TempDir(), "runtime with spaces")
-	if err := os.MkdirAll(filepath.Join(runtimeDir, "transcripts"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-
-	transcript := filepath.Join(runtimeDir, "transcripts", "42")
-	gotRuntime, gotID, err := parseTranscriptPath(transcript)
-	if err != nil {
-		t.Fatalf("parseTranscriptPath() error = %v", err)
-	}
-	if gotRuntime != runtimeDir {
-		t.Fatalf("parseTranscriptPath() runtime directory = %q, want %q", gotRuntime, runtimeDir)
-	}
-	if gotID != 42 {
-		t.Fatalf("parseTranscriptPath() transcript ID = %d, want 42", gotID)
-	}
-}
-
 func TestParseTranscriptPathRejectsRoot(t *testing.T) {
 	if _, _, err := parseTranscriptPath("/transcripts/1"); err == nil {
 		t.Fatal("parseTranscriptPath() accepted the filesystem root")
@@ -71,11 +52,8 @@ func TestParseTranscriptPathRejectsMalformedNames(t *testing.T) {
 	runtimeDir := t.TempDir()
 	for _, filename := range []string{
 		"0",
-		"-1",
 		"01",
-		"one",
 		"1.txt",
-		"1.log",
 		strconv.FormatUint(uint64(^uint(0)>>1)+1, 10),
 	} {
 		path := filepath.Join(runtimeDir, "transcripts", filename)

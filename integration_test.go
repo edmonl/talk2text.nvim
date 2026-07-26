@@ -33,12 +33,6 @@ func TestNeovimIntegration(t *testing.T) {
 	}
 	testDir := t.TempDir()
 
-	// Consult an embedded input so the dependency on the Lua sources remains
-	// explicit even though Neovim loads their filesystem copies below.
-	if _, err := integrationInputs.ReadFile("tests/plugin.lua"); err != nil {
-		t.Fatal(err)
-	}
-
 	pluginDir := filepath.Join(testDir, "plugin")
 	runSuccessfulProcess(t, projectRoot, integrationEnvironment(map[string]string{
 		"TALK2TEXT_TEST_DIR": pluginDir,
@@ -266,14 +260,6 @@ func waitFor(t *testing.T, description string, condition func() bool) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-}
-
-func waitForAbsence(t *testing.T, path string) {
-	t.Helper()
-	waitFor(t, path+" to disappear", func() bool {
-		_, err := os.Lstat(path)
-		return os.IsNotExist(err)
-	})
 }
 
 func isRegularFile(path string) bool {
