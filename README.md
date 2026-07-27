@@ -48,7 +48,7 @@ The supported environment is:
 
 Building the output command requires Go 1.26 or newer. The resulting binary performs target locking and Neovim RPC directly.
 
-The default launch command invokes `nvim`, so it must be on `PATH` when a new editor needs to be started. Desktop notifications use `notify-send` when it is available but are best-effort and optional.
+The default launch command invokes `nvim`, so it must be on `PATH` when a new editor needs to be started. Desktop notifications use the notification command configured for the `talk2text` daemon and are best-effort and optional.
 
 ### Install the Neovim Plugin
 
@@ -81,7 +81,7 @@ mkdir -p ~/.local/bin
 go build -o ~/.local/bin/talk2text-nvim .
 ```
 
-The output command connects to existing targets through Neovim's MessagePack-RPC socket without starting a separate `nvim` client. It starts notification and focus hooks as detached subprocesses. For new-editor startup, it replaces itself with the configured shell command so that command's exit status propagates to the caller.
+The output command connects to existing targets through Neovim's MessagePack-RPC socket without starting a separate `nvim` client. It starts notifications and focus hooks as detached subprocesses. For new-editor startup, it replaces itself with the configured shell command so that command's exit status propagates to the caller.
 
 Make sure `~/.local/bin` is on `PATH`, or pass the full command path to `talk2text daemon -out-cmd`. Rebuild and reinstall the command after updating the checkout.
 
@@ -95,7 +95,7 @@ For each text transcript, `talk2text-nvim` tries targets in this order:
 2. An existing `default-nvim-target`.
 3. A newly started default editor.
 
-Missing and zero-byte targets are skipped. A target that cannot be read, has a nonempty but blank first line, or contains a non-absolute socket path is removed and stops delivery with an error notification. An absolute but unreachable target is removed if it has not changed, reports a stale-target notification, and falls back to the next choice. A reachable target whose transcript load fails is not treated as stale; delivery stops with an error notification so the same transcript is not inserted twice.
+Missing and zero-byte targets are skipped. A target that cannot be read, has a nonempty but blank first line, or contains a non-absolute socket path is removed and stops delivery with an error notification. An absolute but unreachable target is removed if it has not changed, reports an informational `nvim` notification, and falls back to the next choice. A reachable target whose transcript load fails is not treated as stale; delivery stops with an error notification so the same transcript is not inserted twice.
 
 A `short` transcript acts as a shortcut to remove the explicit target. Future text then goes to the default editor. A `blank` transcript does not change either target.
 
@@ -107,15 +107,16 @@ The default launch command opens the transcript as a normal file. Launching does
 
 When an existing default editor is reused, an optional focus hook can bring its window forward.
 
-## Command Hooks
+## Command Configuration
 
-The output command is configured through environment variables:
+The output command has two shell-configurable hooks:
 
 1. `TALK2TEXT_NVIM_LAUNCH_CMD` starts a default editor. Its default is `nvim`, and the transcript path is appended as its only generated argument. Existing-target probes and loads use MessagePack-RPC and do not invoke this command.
 2. `TALK2TEXT_NVIM_FOCUS_CMD` focuses an existing default editor. It is empty by default and is best-effort.
-3. `TALK2TEXT_NVIM_NOTIFY_CMD` reports blank and short transcripts, stale-target cleanup, and fatal target errors. It is best-effort. Fatal target messages begin with `Error: `. When the variable is unset, its default is `notify-send -a talk2text -u normal -t 5000 Talk2text` if `notify-send` is available on `PATH`; otherwise notifications are disabled. An explicitly configured value is used without an availability check.
 
-Each non-empty value is trusted shell code executed with `sh -c`. Generated arguments are appended internally, so command settings do not include `"$@"`. Runtime values are passed as shell positional parameters and are never interpolated into hook code. Hooks inherit the output command's environment and working directory. Integrations are responsible for providing any environment required by configured hooks. The launch command receives the transcript path, and the focus hook receives no generated arguments. The output command writes detached notification and focus hook startup errors and hook stderr to its stderr without changing its exit status.
+Each non-empty hook value is trusted shell code executed with `sh -c`. Generated arguments are appended internally, so command settings do not include `"$@"`. Runtime values are passed as shell positional parameters and are never interpolated into hook code. Hooks inherit the output command's environment and working directory. Integrations are responsible for providing any environment required by configured hooks. The launch command receives the transcript path, and the focus hook receives no generated arguments.
+
+The daemon supplies its user-configured notification executable through `TALK2TEXT_NOTIFY_CMD`. `talk2text-nvim` invokes that executable directly with the message as its only argument. Blank and short transcripts and stale-target cleanup use `TALK2TEXT_NOTIFY_LEVEL=info` and `TALK2TEXT_NOTIFY_CODE=nvim`. Failures use `TALK2TEXT_NOTIFY_LEVEL=error` and `TALK2TEXT_NOTIFY_CODE=output-command`. An empty command disables notifications. Notification and focus startup errors and subprocess stderr are written to the output command's stderr without changing an otherwise successful exit status.
 
 ## Runtime Directory
 

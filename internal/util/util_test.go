@@ -2,6 +2,7 @@ package util
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -22,7 +23,7 @@ func TestRemovePath(t *testing.T) {
 
 func TestRunCmdDetachedReportsStartFailure(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	if err := RunCmdDetached("missing-command"); err == nil {
+	if err := RunCmdDetached(exec.Command("missing-command")); err == nil {
 		t.Fatal("RunCmdDetached() succeeded for a missing command")
 	}
 }

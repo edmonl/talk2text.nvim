@@ -15,6 +15,7 @@ import (
 const (
 	targetName        = "nvim-target"
 	defaultTargetName = "default-nvim-target"
+	outputKindEnv     = "TALK2TEXT_OUTPUT_KIND"
 )
 
 // Embedding the Lua inputs makes changes to them invalidate Go's test cache.
@@ -53,11 +54,13 @@ func TestNeovimIntegration(t *testing.T) {
 
 	focusLog := filepath.Join(testDir, "focus.log")
 	notifyLog := filepath.Join(testDir, "notify.log")
+	notifyCmd := filepath.Join(testDir, "notification command")
+	writeExecutable(t, notifyCmd, "#!/bin/sh\nprintf '%s\\t%s\\t%s\\n' \"$TALK2TEXT_NOTIFY_LEVEL\" \"$TALK2TEXT_NOTIFY_CODE\" \"$1\" >> \"$TALK2TEXT_TEST_NOTIFY_LOG\"\n")
 	hookEnvironment := map[string]string{
 		"TALK2TEXT_TEST_FOCUS_LOG":  focusLog,
 		"TALK2TEXT_TEST_NOTIFY_LOG": notifyLog,
 		"TALK2TEXT_NVIM_FOCUS_CMD":  `printf "focused\n" >> "$TALK2TEXT_TEST_FOCUS_LOG"`,
-		"TALK2TEXT_NVIM_NOTIFY_CMD": `record_notification() { printf "%s\n" "$1" >> "$TALK2TEXT_TEST_NOTIFY_LOG"; }; record_notification`,
+		"TALK2TEXT_NOTIFY_CMD":      notifyCmd,
 	}
 
 	socket := filepath.Join(testDir, "server.sock")
@@ -119,20 +122,26 @@ func TestNeovimIntegration(t *testing.T) {
 	})
 	waitFor(t, "stale target notification", func() bool {
 		contents, err := os.ReadFile(notifyLog)
-		return err == nil && strings.Contains(string(contents), "Stale target /tmp/stale-talk2text-nvim.sock removed")
+		return err == nil && strings.Contains(string(contents), "info\tnvim\t")
 	})
 
 	runNvimExpression(t, projectRoot, socket, `execute("setlocal nomodifiable")`)
 	failedPath := filepath.Join(transcriptDir, "4")
 	writeFile(t, failedPath, "retry me")
-	if output, err := runProcess(projectRoot, outputCommandEnvironment(hookEnvironment, "text"), binary, failedPath); err == nil {
+	output, err := runProcess(projectRoot, outputCommandEnvironment(hookEnvironment, "text"), binary, failedPath)
+	if err == nil {
 		t.Fatalf("reachable target load failure returned success; output: %s", output)
+	}
+	for _, want := range []string{"transcript 4", socket} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("reachable target diagnostic = %q, want text containing %q", output, want)
+		}
 	}
 	assertExists(t, failedPath)
 	assertExists(t, filepath.Join(runtimeDir, defaultTargetName))
 	waitFor(t, "target error notification", func() bool {
 		contents, err := os.ReadFile(notifyLog)
-		return err == nil && strings.Contains(string(contents), "Error: failed to load transcript 4:")
+		return err == nil && strings.Contains(string(contents), "error\toutput-command\t")
 	})
 	runNvimExpression(t, projectRoot, socket, `execute("setlocal modifiable")`)
 
@@ -234,7 +243,9 @@ func integrationEnvironment(overrides map[string]string) []string {
 		"NVIM_LOG_FILE":                  true,
 		"TALK2TEXT_NVIM_FOCUS_CMD":       true,
 		"TALK2TEXT_NVIM_LAUNCH_CMD":      true,
-		"TALK2TEXT_NVIM_NOTIFY_CMD":      true,
+		"TALK2TEXT_NOTIFY_CMD":           true,
+		"TALK2TEXT_NOTIFY_LEVEL":         true,
+		"TALK2TEXT_NOTIFY_CODE":          true,
 		outputKindEnv:                    true,
 		"TALK2TEXT_TEST_CWD_LOG":         true,
 		"TALK2TEXT_TEST_DIR":             true,
@@ -280,6 +291,13 @@ func isRegularFile(path string) bool {
 func writeFile(t *testing.T, path, contents string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeExecutable(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(contents), 0o700); err != nil {
 		t.Fatal(err)
 	}
 }

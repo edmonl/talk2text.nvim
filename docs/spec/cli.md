@@ -11,10 +11,12 @@ This document defines the command's externally observable behavior. Its implemen
 It is used as the `talk2text` output command, so it accepts the same argument shape:
 
 ```sh
-TALK2TEXT_OUTPUT_KIND=<kind> talk2text-nvim <path>
+TALK2TEXT_OUTPUT_KIND=<kind> \
+TALK2TEXT_NOTIFY_CMD=<notification-command> \
+talk2text-nvim <path>
 ```
 
-The transcript path is the command's only argument. `TALK2TEXT_OUTPUT_KIND` is daemon-owned command metadata. Supported values are:
+The transcript path is the command's only argument. `TALK2TEXT_OUTPUT_KIND` and `TALK2TEXT_NOTIFY_CMD` are daemon-owned command metadata. `TALK2TEXT_NOTIFY_CMD` is the user-configured notification executable or an empty value when notifications are disabled. Supported output-kind values are:
 
 1. `text`
 2. `blank`
@@ -31,23 +33,24 @@ Exit status has only two semantic categories:
 
 Specific nonzero status values are implementation details.
 
-Notifications are best-effort. A missing or failing notification command does not change an otherwise successful exit status.
+Notifications are best-effort. A missing or failing notification command does not change an otherwise successful exit status. Informational Neovim integration events use `TALK2TEXT_NOTIFY_LEVEL=info` and `TALK2TEXT_NOTIFY_CODE=nvim`. Output failures use `TALK2TEXT_NOTIFY_LEVEL=error` and `TALK2TEXT_NOTIFY_CODE=output-command`. Notification text is user-facing and should be chosen for the intended UX; it may include or omit the transcript ID. Diagnostic messages written to standard error should include the transcript ID whenever it is available.
 
 For `blank` and `short`, an already-absent transcript file counts as already cleaned. Transcript cleanup is best-effort: failure is reported but does not interrupt the remaining handling or change an otherwise successful exit status.
 
 # Command Hooks
 
-The command uses shell-configurable hooks for notifications, default editor startup, and editor focus. Defaults:
+The command uses shell-configurable hooks for default editor startup and editor focus. Defaults:
 
-1. `TALK2TEXT_NVIM_NOTIFY_CMD`: `notify-send -a talk2text -u normal -t 5000 Talk2text` when `notify-send` is available on `PATH`; otherwise empty.
-2. `TALK2TEXT_NVIM_LAUNCH_CMD`: `nvim`.
-3. `TALK2TEXT_NVIM_FOCUS_CMD`: empty.
+1. `TALK2TEXT_NVIM_LAUNCH_CMD`: `nvim`.
+2. `TALK2TEXT_NVIM_FOCUS_CMD`: empty.
 
-The launch command is required only when a new default editor must be started. Existing-target delivery does not require it. The notification and focus hooks are optional and skipped when empty. A missing required setting causes failure when it is needed.
+The launch command is required only when a new default editor must be started. Existing-target delivery does not require it. The focus hook is optional and skipped when empty. A missing required setting causes failure when it is needed.
 
-Each setting is read from its correspondingly named environment variable and has surrounding whitespace removed. When the notification variable is unset, the command checks for `notify-send` while constructing its configuration and enables the listed default only when the executable is available. Explicit notification values, including an empty value or the default text, are used without an availability check. The other unset settings use their listed defaults. Each non-empty setting is trusted shell code run with `sh -c`. Hooks inherit the output command's current environment and working directory. Generated arguments are appended internally, so settings do not include `"$@"`. Runtime values are supplied as shell positional parameters and must never be interpolated into hook code. The notification command receives the notification body as one argument. It reports blank and short transcripts, successful stale-target deletion, and fatal target errors; fatal target messages begin with `Error: `. Existing-target probes and loads use MessagePack-RPC directly without invoking the launch command. For default-editor startup, the transcript path is appended to the complete launch command as its only generated argument. The focus command receives no generated arguments.
+Each hook setting is read from its correspondingly named environment variable and has surrounding whitespace removed. Unset settings use their listed defaults. Each non-empty hook setting is trusted shell code run with `sh -c`. Hooks inherit the output command's current environment and working directory. Generated arguments are appended internally, so settings do not include `"$@"`. Runtime values are supplied as shell positional parameters and must never be interpolated into hook code. Existing-target probes and loads use MessagePack-RPC directly without invoking the launch command. For default-editor startup, the transcript path is appended to the complete launch command as its only generated argument. The focus command receives no generated arguments.
 
-Notification and focus hooks run asynchronously after their shell process starts successfully. Immediate shell-start failures and hook stderr are written to the output command's stderr without changing its exit status. Default-editor startup remains attached to the caller and propagates the configured shell command's exit status. Notification and focus hooks retain their best-effort result semantics.
+The notification command is not a shell hook. The command uses `TALK2TEXT_NOTIFY_CMD` as an executable and appends the notification message as its only argument. Notifications inherit the output command's environment and working directory, with `TALK2TEXT_NOTIFY_LEVEL` and `TALK2TEXT_NOTIFY_CODE` set for each invocation.
+
+Notification commands and focus hooks run asynchronously after their process starts successfully. Immediate start failures and subprocess stderr are written to the output command's stderr without changing its exit status. Default-editor startup remains attached to the caller and propagates the configured shell command's exit status. Notification commands and focus hooks retain their best-effort result semantics.
 
 Users may set command hooks as environment variables for an invocation or wrapper, or copy the command and adapt its defaults. The distributed `nvim` launch default satisfies the launch-command requirement.
 
@@ -67,7 +70,7 @@ For normal text transcripts:
 
 Successful loads into existing targets remove the transcript file. If a target is reachable but the load returns `false, err` or raises a Lua error, the command exits nonzero instead of falling back. This includes failure to remove the file after it was loaded; it does not retry the load, because retrying could append the same transcript twice. The file remains for `talk2text`'s next startup cleanup. A newly launched editor receives the transcript path and owns that file's subsequent lifecycle.
 
-If an absolute target cannot be reached as a Neovim server, the command treats that target as stale and falls back according to the target resolution order after conditionally deleting it. Successful stale deletion emits a stale-target notification. Target read errors, a nonempty blank first line, a non-absolute socket path, cleanup failures, and reachable-target load failures are fatal and emit notifications beginning with `Error: `.
+If an absolute target cannot be reached as a Neovim server, the command treats that target as stale and falls back according to the target resolution order after conditionally deleting it. Successful stale deletion emits an `info` / `nvim` notification. Target read errors, a nonempty blank first line, a non-absolute socket path, cleanup failures, and reachable-target load failures are fatal and emit an `error` / `output-command` notification.
 
 # `TALK2TEXT_OUTPUT_KIND=blank`
 
@@ -77,15 +80,8 @@ For blank transcripts:
 2. Do not start or focus the default editor.
 3. Do not change `nvim-target` or `default-nvim-target`.
 4. Attempt to remove `path`.
-5. Emit a notification with the configured notification command.
+5. Emit an `info` / `nvim` notification through the daemon-provided notification command.
 6. Exit `0`.
-
-Default notification:
-
-```text
-title: Talk2text
-body: Blank transcript
-```
 
 # `TALK2TEXT_OUTPUT_KIND=short`
 
@@ -96,15 +92,8 @@ For short transcripts, the command is used as a shortcut to switch future text o
 3. Delete `<runtime_dir>/nvim-target` if it exists.
 4. Do not delete or change `<runtime_dir>/default-nvim-target`.
 5. Do not start or focus the default editor.
-6. Emit a notification with the configured notification command, whether or not `nvim-target` existed.
+6. Emit an `info` / `nvim` notification through the daemon-provided notification command, whether or not `nvim-target` existed.
 7. Exit `0` after a successful target reset, including when `nvim-target` is already absent. Exit nonzero if the target cannot be reset.
-
-Default notification:
-
-```text
-title: Talk2text
-body: Target reset to default Neovim
-```
 
 # Default Neovim Editor
 

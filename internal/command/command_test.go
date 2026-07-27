@@ -1,9 +1,11 @@
 package command
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -12,29 +14,11 @@ import (
 )
 
 func TestNewCommand(t *testing.T) {
-	t.Run("uses default when notify-send is available", func(t *testing.T) {
-		unsetEnvironment(t, "TALK2TEXT_NVIM_NOTIFY_CMD")
-		binDir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(binDir, "notify-send"), nil, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		t.Setenv("PATH", binDir)
-
-		if got := New("", "", 0).notifyCmd; got != defaultNotifyCmd {
-			t.Fatalf("notification command = %q, want %q", got, defaultNotifyCmd)
-		}
-	})
-
 	t.Run("uses fallback configuration", func(t *testing.T) {
-		unsetEnvironment(t, "TALK2TEXT_NVIM_NOTIFY_CMD")
 		unsetEnvironment(t, "TALK2TEXT_NVIM_LAUNCH_CMD")
 		unsetEnvironment(t, "TALK2TEXT_NVIM_FOCUS_CMD")
-		t.Setenv("PATH", t.TempDir())
 
-		got := New("", "", 0)
-		if got.notifyCmd != "" {
-			t.Fatalf("notification command = %q, want disabled", got.notifyCmd)
-		}
+		got := newTestCommand(t)
 		if got.launchCmd != "nvim" {
 			t.Fatalf("launch command = %q, want nvim", got.launchCmd)
 		}
@@ -43,16 +27,11 @@ func TestNewCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("trims explicit configuration without checking notification command", func(t *testing.T) {
-		t.Setenv("PATH", t.TempDir())
-		t.Setenv("TALK2TEXT_NVIM_NOTIFY_CMD", " \tmissing-notifier --flag\n")
+	t.Run("trims explicit configuration", func(t *testing.T) {
 		t.Setenv("TALK2TEXT_NVIM_LAUNCH_CMD", " \tterminal -- nvim\n")
 		t.Setenv("TALK2TEXT_NVIM_FOCUS_CMD", " \tfocus-window --current\n")
 
-		got := New("", "", 0)
-		if got.notifyCmd != "missing-notifier --flag" {
-			t.Fatalf("notification command = %q, want explicit command", got.notifyCmd)
-		}
+		got := newTestCommand(t)
 		if got.launchCmd != "terminal -- nvim" {
 			t.Fatalf("launch command = %q, want explicit command", got.launchCmd)
 		}
@@ -61,13 +40,93 @@ func TestNewCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("preserves explicit empty command", func(t *testing.T) {
-		t.Setenv("TALK2TEXT_NVIM_NOTIFY_CMD", " \t\n")
+	t.Run("preserves notification executable", func(t *testing.T) {
+		const executable = " \t/path/to/notification command\n"
+		t.Setenv("TALK2TEXT_NOTIFY_CMD", executable)
 
-		if got := New("", "", 0).notifyCmd; got != "" {
-			t.Fatalf("notification command = %q, want disabled", got)
+		if got := newTestCommand(t).notifyCmd; got != executable {
+			t.Fatalf("notification command = %q, want %q", got, executable)
 		}
 	})
+
+}
+
+func newTestCommand(t *testing.T) *Command {
+	t.Helper()
+	runtimeDir := t.TempDir()
+	transcriptDir := filepath.Join(runtimeDir, "transcripts")
+	if err := os.Mkdir(transcriptDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(outputKindEnv, "text")
+
+	got, kind, err := Parse([]string{filepath.Join(transcriptDir, "1")})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if kind != "text" {
+		t.Fatalf("Parse() kind = %q, want text", kind)
+	}
+	if got.TranscriptID() != 1 {
+		t.Fatalf("Command.TranscriptID() = %d, want 1", got.TranscriptID())
+	}
+	return got
+}
+
+func TestParseTranscriptPathPreservesRuntimePath(t *testing.T) {
+	root := t.TempDir()
+	runtimeDir := filepath.Join(root, "runtime with spaces")
+	resolvedTranscriptDir := filepath.Join(root, "recordings")
+	if err := os.Mkdir(runtimeDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(resolvedTranscriptDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(resolvedTranscriptDir, filepath.Join(runtimeDir, "transcripts")); err != nil {
+		t.Fatal(err)
+	}
+
+	transcript := filepath.Join(runtimeDir, "transcripts", "42")
+	gotRuntime, gotID, err := parseTranscriptPath(transcript)
+	if err != nil {
+		t.Fatalf("parseTranscriptPath() error = %v", err)
+	}
+	if gotRuntime != runtimeDir {
+		t.Fatalf("parseTranscriptPath() runtime directory = %q, want symlink path %q", gotRuntime, runtimeDir)
+	}
+	if gotID != 42 {
+		t.Fatalf("parseTranscriptPath() transcript ID = %d, want 42", gotID)
+	}
+}
+
+func TestParseTranscriptPathRejectsRoot(t *testing.T) {
+	if _, _, err := parseTranscriptPath("/transcripts/1"); err == nil {
+		t.Fatal("parseTranscriptPath() accepted the filesystem root")
+	}
+}
+
+func TestParseTranscriptPathRejectsInvalidPath(t *testing.T) {
+	for _, path := range []string{"runtime/transcripts/1", "/runtime/transcripts/"} {
+		if _, _, err := parseTranscriptPath(path); err == nil || err.Error() != "transcript path must be an absolute file path" {
+			t.Errorf("parseTranscriptPath(%q) error = %v, want absolute-path error", path, err)
+		}
+	}
+}
+
+func TestParseTranscriptPathRejectsMalformedNames(t *testing.T) {
+	runtimeDir := t.TempDir()
+	for _, filename := range []string{
+		"0",
+		"01",
+		"1.txt",
+		strconv.FormatUint(uint64(^uint(0)>>1)+1, 10),
+	} {
+		path := filepath.Join(runtimeDir, "transcripts", filename)
+		if _, _, err := parseTranscriptPath(path); err == nil {
+			t.Errorf("parseTranscriptPath(%q) accepted a malformed filename", path)
+		}
+	}
 }
 
 func unsetEnvironment(t *testing.T, name string) {
@@ -86,6 +145,8 @@ func unsetEnvironment(t *testing.T, name string) {
 }
 
 func TestHandleBlank(t *testing.T) {
+	t.Setenv("TALK2TEXT_NOTIFY_CMD", "")
+
 	t.Run("removes transcript", func(t *testing.T) {
 		transcript := filepath.Join(t.TempDir(), "transcript")
 		if err := os.WriteFile(transcript, nil, 0o600); err != nil {
@@ -121,6 +182,8 @@ func TestHandleBlank(t *testing.T) {
 }
 
 func TestHandleShort(t *testing.T) {
+	t.Setenv("TALK2TEXT_NOTIFY_CMD", "")
+
 	t.Run("removes transcript and explicit target", func(t *testing.T) {
 		runtimeDir := t.TempDir()
 		transcript := filepath.Join(runtimeDir, "transcript")
@@ -259,26 +322,40 @@ func TestTryTargetRejectsRelativeAddress(t *testing.T) {
 	}
 }
 
-func TestDetachedHookStartErrorsAreReported(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		run  func(*Command)
-	}{
-		{"notification", func(command *Command) { command.notify("message") }},
-		{"focus", func(command *Command) { command.focusDefault() }},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			command := &Command{
-				notifyCmd: "true",
-				focusCmd:  "true",
-				shellPath: filepath.Join(t.TempDir(), "missing-shell"),
-			}
-			stderr := captureStderr(t, func() { test.run(command) })
-			want := "cannot start " + test.name + " command:"
-			if !strings.Contains(stderr, want) {
-				t.Fatalf("stderr = %q, want text containing %q", stderr, want)
-			}
-		})
+func TestNotifyErrorPreservesDiagnostic(t *testing.T) {
+	cause := errors.New("low-level detail")
+	err := (&Command{transcriptID: 17}).notifyError(cause)
+	if !errors.Is(err, cause) {
+		t.Fatalf("notifyError() error = %v, want wrapped cause", err)
+	}
+}
+
+func TestDetachedNotificationStartErrorsAreReported(t *testing.T) {
+	command := &Command{
+		notifyCmd:    filepath.Join(t.TempDir(), "missing-notifier"),
+		transcriptID: 17,
+	}
+	stderr := captureStderr(t, func() {
+		command.notifyInfo("message")
+	})
+	for _, want := range []string{"transcript 17", "notification command error"} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("stderr = %q, want text containing %q", stderr, want)
+		}
+	}
+}
+
+func TestDetachedFocusStartErrorsAreReported(t *testing.T) {
+	command := &Command{
+		focusCmd:     "true",
+		shellPath:    filepath.Join(t.TempDir(), "missing-shell"),
+		transcriptID: 17,
+	}
+	stderr := captureStderr(t, command.focusDefault)
+	for _, want := range []string{"transcript 17", "focus command error"} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("stderr = %q, want text containing %q", stderr, want)
+		}
 	}
 }
 
