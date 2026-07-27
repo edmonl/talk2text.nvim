@@ -125,7 +125,7 @@ func TestNeovimIntegration(t *testing.T) {
 	runNvimExpression(t, projectRoot, socket, `execute("setlocal nomodifiable")`)
 	failedPath := filepath.Join(transcriptDir, "4")
 	writeFile(t, failedPath, "retry me")
-	if output, err := runProcess(projectRoot, integrationEnvironment(hookEnvironment), binary, "text", failedPath); err == nil {
+	if output, err := runProcess(projectRoot, outputCommandEnvironment(hookEnvironment, "text"), binary, failedPath); err == nil {
 		t.Fatalf("reachable target load failure returned success; output: %s", output)
 	}
 	assertExists(t, failedPath)
@@ -183,15 +183,24 @@ func TestNeovimIntegration(t *testing.T) {
 	failedDirectEnvironment := map[string]string{
 		"TALK2TEXT_NVIM_LAUNCH_CMD": `failed_direct_launch() { return 23; }; failed_direct_launch`,
 	}
-	if output, err := runProcess(projectRoot, integrationEnvironment(failedDirectEnvironment), binary, "text", directFailurePath); err == nil {
+	if output, err := runProcess(projectRoot, outputCommandEnvironment(failedDirectEnvironment, "text"), binary, directFailurePath); err == nil {
 		t.Fatalf("failed direct Neovim launch returned success; output: %s", output)
 	}
 	assertExists(t, directFailurePath)
 }
 
-func runOutputCommand(t *testing.T, directory string, environment map[string]string, binary string, args ...string) {
+func runOutputCommand(t *testing.T, directory string, environment map[string]string, binary, kind, path string) {
 	t.Helper()
-	runSuccessfulProcess(t, directory, integrationEnvironment(environment), binary, args...)
+	runSuccessfulProcess(t, directory, outputCommandEnvironment(environment, kind), binary, path)
+}
+
+func outputCommandEnvironment(overrides map[string]string, kind string) []string {
+	environment := make(map[string]string, len(overrides)+1)
+	for name, value := range overrides {
+		environment[name] = value
+	}
+	environment[outputKindEnv] = kind
+	return integrationEnvironment(environment)
 }
 
 func runNvimExpression(t *testing.T, directory, socket, expression string) string {
@@ -226,6 +235,7 @@ func integrationEnvironment(overrides map[string]string) []string {
 		"TALK2TEXT_NVIM_FOCUS_CMD":       true,
 		"TALK2TEXT_NVIM_LAUNCH_CMD":      true,
 		"TALK2TEXT_NVIM_NOTIFY_CMD":      true,
+		outputKindEnv:                    true,
 		"TALK2TEXT_TEST_CWD_LOG":         true,
 		"TALK2TEXT_TEST_DIR":             true,
 		"TALK2TEXT_TEST_FOCUS_LOG":       true,

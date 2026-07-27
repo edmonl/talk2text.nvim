@@ -10,6 +10,8 @@ import (
 	"github.com/edmonl/talk2text.nvim/internal/command"
 )
 
+const outputKindEnv = "TALK2TEXT_OUTPUT_KIND"
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "talk2text-nvim: %v\n", err)
@@ -18,11 +20,17 @@ func main() {
 }
 
 func run(args []string) error {
-	if len(args) != 2 {
-		return errors.New("usage: talk2text-nvim <text|blank|short> <path>")
+	if len(args) != 1 {
+		return errors.New("usage: TALK2TEXT_OUTPUT_KIND=<text|blank|short> talk2text-nvim <path>")
 	}
 
-	kind, transcriptPath := args[0], args[1]
+	kind, transcriptPath := os.Getenv(outputKindEnv), args[0]
+	switch kind {
+	case "text", "blank", "short":
+	default:
+		return fmt.Errorf("unknown transcript kind %s", kind)
+	}
+
 	runtimeDir, clipID, err := parseTranscriptPath(transcriptPath)
 	if err != nil {
 		return err
@@ -36,8 +44,6 @@ func run(args []string) error {
 		c.HandleBlank()
 	case "short":
 		return c.HandleShort()
-	default:
-		return fmt.Errorf("unknown transcript kind: %s", kind)
 	}
 
 	return nil

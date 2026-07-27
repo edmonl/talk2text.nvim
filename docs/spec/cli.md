@@ -11,16 +11,16 @@ This document defines the command's externally observable behavior. Its implemen
 It is used as the `talk2text` output command, so it accepts the same argument shape:
 
 ```sh
-talk2text-nvim <kind> <path>
+TALK2TEXT_OUTPUT_KIND=<kind> talk2text-nvim <path>
 ```
 
-Supported kinds:
+The transcript path is the command's only argument. `TALK2TEXT_OUTPUT_KIND` is daemon-owned command metadata. Supported values are:
 
 1. `text`
 2. `blank`
 3. `short`
 
-Unknown arguments or invalid invocation exit with a nonzero status. No detailed logging is required because output command logs may be discarded by `talk2text`.
+Unknown metadata values, extra arguments, or other invalid invocations exit with a nonzero status. No detailed logging is required because output command logs may be discarded by `talk2text`.
 
 For every kind, the transcript filename must have the canonical form `<positive-id>`, where the ID is a base-10 positive integer without a sign or leading zero. The command derives that ID after validating the path and passes only the ID to Neovim. Runtime selection inside the plugin remains governed by plugin configuration; internal remote-load and default-start adapters do not receive a runtime directory.
 
@@ -51,7 +51,7 @@ Notification and focus hooks run asynchronously after their shell process starts
 
 Users may set command hooks as environment variables for an invocation or wrapper, or copy the command and adapt its defaults. The distributed `nvim` launch default satisfies the launch-command requirement.
 
-# `text <path>`
+# `TALK2TEXT_OUTPUT_KIND=text`
 
 For normal text transcripts:
 
@@ -69,7 +69,7 @@ Successful loads into existing targets remove the transcript file. If a target i
 
 If an absolute target cannot be reached as a Neovim server, the command treats that target as stale and falls back according to the target resolution order after conditionally deleting it. Successful stale deletion emits a stale-target notification. Target read errors, a nonempty blank first line, a non-absolute socket path, cleanup failures, and reachable-target load failures are fatal and emit notifications beginning with `Error: `.
 
-# `blank <path>`
+# `TALK2TEXT_OUTPUT_KIND=blank`
 
 For blank transcripts:
 
@@ -87,7 +87,7 @@ title: Talk2text
 body: Blank transcript
 ```
 
-# `short <path>`
+# `TALK2TEXT_OUTPUT_KIND=short`
 
 For short transcripts, the command is used as a shortcut to switch future text output back to the default Neovim editor:
 

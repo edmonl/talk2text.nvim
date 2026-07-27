@@ -160,7 +160,7 @@ Lua API IDs must be integers from 1 through 9007199254740991 when supplied expli
 3. If no selected target exists and default-editor startup fails, confirm that `TALK2TEXT_NVIM_LAUNCH_CMD` can start Neovim.
 4. If an existing default editor does not come forward, configure `TALK2TEXT_NVIM_FOCUS_CMD` for your window manager.
 5. If `qq` cannot copy from the default editor, check Neovim's `+` clipboard provider with `:checkhealth`.
-6. Run `talk2text-nvim <kind> <absolute-transcript-path>` directly from a shell to inspect errors written to stderr.
+6. Run `TALK2TEXT_OUTPUT_KIND=<kind> talk2text-nvim <absolute-transcript-path>` directly from a shell to inspect errors written to stderr.
 
 More detailed behavior is documented in [docs/spec.md](docs/spec.md).
 
