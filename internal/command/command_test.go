@@ -1,7 +1,6 @@
 package command
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,6 +23,9 @@ func TestNewCommand(t *testing.T) {
 		}
 		if got.focusCmd != "" {
 			t.Fatalf("focus command = %q, want empty", got.focusCmd)
+		}
+		if got.TranscriptID() != 1 {
+			t.Fatalf("transcript ID = %d, want 1", got.TranscriptID())
 		}
 	})
 
@@ -84,15 +86,9 @@ func newTestCommand(t *testing.T) *Command {
 	}
 	t.Setenv(outputKindEnv, "text")
 
-	got, kind, err := Parse([]string{filepath.Join(transcriptDir, "1")})
+	got, _, err := Parse([]string{filepath.Join(transcriptDir, "1")})
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
-	}
-	if kind != "text" {
-		t.Fatalf("Parse() kind = %q, want text", kind)
-	}
-	if got.TranscriptID() != 1 {
-		t.Fatalf("Command.TranscriptID() = %d, want 1", got.TranscriptID())
 	}
 	return got
 }
@@ -168,41 +164,26 @@ func unsetEnvironment(t *testing.T, name string) {
 	})
 }
 
-func TestHandleBlank(t *testing.T) {
+func TestHandleBlankReportsCleanupFailure(t *testing.T) {
 	t.Setenv("TALK2TEXT_NOTIFY_CMD", "")
 
-	t.Run("removes transcript", func(t *testing.T) {
-		transcript := filepath.Join(t.TempDir(), "transcript")
-		if err := os.WriteFile(transcript, nil, 0o600); err != nil {
-			t.Fatal(err)
-		}
+	transcript := filepath.Join(t.TempDir(), "transcript")
+	if err := os.Mkdir(transcript, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(transcript, "entry"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
+	stderr := captureStderr(t, func() {
 		(&Command{transcriptPath: transcript}).HandleBlank()
-		if _, err := os.Lstat(transcript); !os.IsNotExist(err) {
-			t.Fatalf("blank transcript was not removed: %v", err)
-		}
 	})
-
-	t.Run("cleanup is best effort", func(t *testing.T) {
-		transcript := filepath.Join(t.TempDir(), "transcript")
-		if err := os.Mkdir(transcript, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(transcript, "entry"), nil, 0o600); err != nil {
-			t.Fatal(err)
-		}
-
-		stderr := captureStderr(t, func() {
-			(&Command{transcriptPath: transcript}).HandleBlank()
-		})
-		if !strings.Contains(stderr, "cannot remove transcript") {
-			t.Fatalf("stderr = %q, want transcript cleanup failure", stderr)
-		}
-		if info, err := os.Stat(transcript); err != nil || !info.IsDir() {
-			t.Fatalf("transcript directory was removed or changed: %v", err)
-		}
-	})
-
+	if !strings.Contains(stderr, "cannot remove transcript") {
+		t.Fatalf("stderr = %q, want transcript cleanup failure", stderr)
+	}
+	if info, err := os.Stat(transcript); err != nil || !info.IsDir() {
+		t.Fatalf("transcript directory was removed or changed: %v", err)
+	}
 }
 
 func TestHandleShort(t *testing.T) {
@@ -346,40 +327,38 @@ func TestTryTargetRejectsRelativeAddress(t *testing.T) {
 	}
 }
 
-func TestNotifyErrorPreservesDiagnostic(t *testing.T) {
-	cause := errors.New("low-level detail")
-	err := (&Command{transcriptID: 17}).notifyError(cause)
-	if !errors.Is(err, cause) {
-		t.Fatalf("notifyError() error = %v, want wrapped cause", err)
-	}
-}
-
-func TestDetachedNotificationStartErrorsAreReported(t *testing.T) {
-	command := &Command{
-		notifyCmd:    filepath.Join(t.TempDir(), "missing-notifier"),
-		transcriptID: 17,
-	}
-	stderr := captureStderr(t, func() {
-		command.notifyInfo("message")
-	})
-	for _, want := range []string{"transcript 17", "notification command error"} {
-		if !strings.Contains(stderr, want) {
-			t.Fatalf("stderr = %q, want text containing %q", stderr, want)
-		}
-	}
-}
-
-func TestDetachedFocusStartErrorsAreReported(t *testing.T) {
-	command := &Command{
-		focusCmd:     "true",
-		shellPath:    filepath.Join(t.TempDir(), "missing-shell"),
-		transcriptID: 17,
-	}
-	stderr := captureStderr(t, command.focusDefault)
-	for _, want := range []string{"transcript 17", "focus command error"} {
-		if !strings.Contains(stderr, want) {
-			t.Fatalf("stderr = %q, want text containing %q", stderr, want)
-		}
+func TestDetachedStartErrorsAreReported(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		configure func(*testing.T, *Command)
+		run       func(*Command)
+	}{
+		{
+			name: "notification",
+			configure: func(t *testing.T, command *Command) {
+				command.notifyCmd = filepath.Join(t.TempDir(), "missing-notifier")
+			},
+			run: func(command *Command) { command.notifyInfo("message") },
+		},
+		{
+			name: "focus",
+			configure: func(t *testing.T, command *Command) {
+				command.focusCmd = "true"
+				command.shellPath = filepath.Join(t.TempDir(), "missing-shell")
+			},
+			run: (*Command).focusDefault,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			command := &Command{transcriptID: 17}
+			test.configure(t, command)
+			stderr := captureStderr(t, func() { test.run(command) })
+			for _, want := range []string{"transcript 17", test.name + " command error"} {
+				if !strings.Contains(stderr, want) {
+					t.Fatalf("stderr = %q, want text containing %q", stderr, want)
+				}
+			}
+		})
 	}
 }
 

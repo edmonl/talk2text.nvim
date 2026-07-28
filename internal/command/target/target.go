@@ -51,6 +51,8 @@ func readTarget(path string) (string, error) {
 		return "", removeInvalid(path, fmt.Errorf("cannot close target file %s: %w", path, closeErr))
 	}
 	if line == "" && errors.Is(readErr, io.EOF) {
+		// Preserve a zero-byte target as not yet published rather than treating
+		// it as malformed and deleting it.
 		return "", nil
 	}
 

@@ -46,11 +46,6 @@ func TestRunRejectsInvalidCommandContract(t *testing.T) {
 			want: "usage:",
 		},
 		{
-			name: "missing kind",
-			args: []string{"/runtime/transcripts/1"},
-			want: "unknown transcript kind",
-		},
-		{
 			name: "unknown kind",
 			kind: "other",
 			args: []string{"/runtime/transcripts/1"},

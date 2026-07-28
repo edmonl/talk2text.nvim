@@ -166,6 +166,8 @@ func (c *Command) tryTarget(name string) (targetResult, error) {
 	}
 
 	var loaded bool
+	// Once loading is attempted, do not fall back: the remote may have inserted
+	// the transcript before reporting failure, so retrying could duplicate it.
 	if err := client.ExecLua(remoteLoadLua, &loaded, c.transcriptID); err != nil {
 		return targetFatal, fmt.Errorf("failed to load transcript to %s: %w", address, err)
 	}
@@ -206,6 +208,8 @@ func (c *Command) launchDefault() error {
 		return err
 	}
 	code := c.launchCmd + ` "$@"`
+	// sh -c consumes argv[0], so the synthetic name leaves the transcript in
+	// "$@". Exec preserves the launch command's exit status for the caller.
 	return syscall.Exec(shell, []string{"sh", "-c", code, "talk2text-nvim-launch", c.transcriptPath}, childEnvironment())
 }
 

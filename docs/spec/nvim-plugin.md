@@ -1,7 +1,5 @@
 # Neovim Plugin
 
-The plugin uses a normal plugin-manager layout with Lua module files under `lua/talk2text/`. A `plugin/*.lua` loader is not required for the initial implementation.
-
 The public Lua API is:
 
 ```lua
@@ -10,6 +8,8 @@ require("talk2text").set_target(id)
 require("talk2text").load(id)
 require("talk2text").start_default_target(id)
 ```
+
+`setup()`, `set_target()`, and `load()` return `true` on success or `false, err` on expected failure. They report failures through Neovim notifications rather than raising another error.
 
 # `setup(opts)`
 
@@ -25,22 +25,15 @@ require("talk2text").setup({
 })
 ```
 
-`setup()` resolves and validates the runtime directory, then confirms that `<runtime_dir>/daemon.sock` accepts a connection. It does not perform a daemon status request. The first runtime directory successfully resolved by `setup()`, `set_target()`, or `load()` remains fixed for the Neovim session. A later `setup()` call for the same directory succeeds without checking the daemon again, but it cannot switch to another directory. On failure, `setup()` emits one error notification inside Neovim and returns `false, err` without raising another error. Calling `setup()` does not make the current Neovim instance the target. Plugin configuration comes from the user's normal Neovim configuration; the output command does not call `setup()`.
+`setup()` selects and validates the runtime directory and requires the daemon to be available. The first successfully selected runtime remains fixed for the Neovim session; selecting it again succeeds, while switching to another runtime fails. Calling `setup()` does not make the current Neovim instance the target.
 
 # `set_target([id])`
 
 Makes the current Neovim instance the `talk2text` target, then applies the same ID behavior as `load([id])`.
 
-Behavior:
+It resolves the runtime directory, ensures the current instance has a Neovim server, and publishes that server as `nvim-target`. The target is removed on exit only if it still belongs to this instance. An informational notification is emitted only when the target changes.
 
-1. Resolves the runtime directory from `setup({ runtime_dir = ... })` or from the same environment-based discovery rules as `talk2text`.
-2. Fails with an error if the runtime directory is missing, invalid, or unavailable.
-3. Starts a Neovim server if the current instance does not already have one.
-4. Writes the current server socket path to `<runtime_dir>/nvim-target`.
-5. Registers quit-time cleanup that deletes `nvim-target` only when it still points to this same server socket.
-6. Emits an informational notification only when the target actually changes to this server. Repeating `set_target()` in the same target emits no target-switch notification.
-7. Calls `load(id)` after target registration. Target registration happens even when `id` is invalid, so a negative or otherwise invalid ID reports a load error without undoing the switch.
-8. On target-registration failure, emits one error notification inside Neovim and returns `false, err` without raising another error.
+Target registration happens before `load(id)`. A load failure, including an invalid ID, does not undo a successful target switch.
 
 Normal Neovim sessions do not become the target unless the user explicitly calls `set_target()`. There is no default keymap. Users may define their own, for example:
 
@@ -56,43 +49,23 @@ With this mapping, a positive count selects the editor and loads that transcript
 
 Loads a transcript into the current buffer by its runtime-scoped clip ID.
 
-Behavior:
-
-1. An integer `id` from 1 through 9007199254740991 reads `<runtime_dir>/transcripts/<id>` using the runtime configured by `setup()` or the normal discovery rules. The upper bound is LuaJIT's maximum safe integer.
-2. `load()`, `load(nil)`, and `load(0)` retry the remembered failed ID. If no ID is remembered, they are successful no-ops.
-3. An ID outside the supported range, a fractional ID, or a nonnumeric ID is invalid. It emits an error notification that includes the supplied ID and returns `false, err`.
-4. Leading and trailing transcript whitespace is discarded. An empty transcript is a no-op.
-5. A non-empty transcript is treated as a single word when it contains no whitespace and its final character does not match the Lua punctuation class `%p`. Internal punctuation is allowed, so `well-known` is a word but `unfinished-` is not.
-6. A single-word transcript is inserted on the cursor's current line without splitting the current whitespace-delimited word. If the cursor is within a word, insertion happens after the whole word.
-7. Insertion happens before trailing punctuation under the cursor. Punctuation is trailing when only punctuation appears between the cursor and the next whitespace or end of line; punctuation followed by more non-whitespace text remains part of the current word, as in `it's`.
-8. When surrounding text exists, the inserted word is preceded by existing whitespace or at least one added space and followed by at least one whitespace character or punctuation. Existing whitespace before the cursor is preserved.
-9. After single-word insertion, the plugin attempts to move the cursor to the beginning of the inserted word. Failure to move the cursor does not fail an otherwise successful load.
-10. Other non-empty transcripts are appended to the cursor's current line. An empty current line is replaced directly; otherwise, trailing spaces are normalized and exactly one space separates the existing line from the transcript's first line. Remaining transcript lines are inserted below it, preserving interior blank lines. The cursor then moves to the beginning of the final resulting line.
-11. It removes the source file only after the load or no-op succeeds.
-12. Returns `true` on a successful load or no-op.
-13. Returns `false, err` on expected failure.
-14. On failure, emits one error notification inside Neovim and returns `false, err` without raising another error. Transcript-specific notifications include the ID. This applies equally to direct Lua calls, remote command delivery, and default-editor startup.
-15. After a remembered failed ID is retried and loaded successfully, emits an informational notification that includes the ID. A retry with no remembered ID remains a silent successful no-op.
+1. A positive safe integer ID reads `<runtime_dir>/transcripts/<id>`. Other values are invalid, except `nil` and `0`, which retry the remembered failed ID or succeed as no-ops when none exists.
+2. Leading and trailing transcript whitespace is discarded. An empty transcript does not change the buffer.
+3. A transcript with no whitespace and no trailing punctuation is inserted as a word after the word under the cursor and before its trailing punctuation. Existing whitespace is preserved where possible, and the cursor moves to the inserted word.
+4. Other non-empty transcripts are appended at the current line. Existing trailing spaces are normalized, interior transcript lines are preserved, and the cursor moves to the final inserted line.
+5. The source file is removed only after a successful load or no-op.
+6. Transcript failures notify with the ID. A successful retry emits an informational notification; a retry with no remembered failure is silent.
 
 The plugin remembers one failed ID in memory for the current Neovim session. A failed explicit load replaces the remembered ID, a failed retry keeps it, and any successful load clears it. A failed load does not partially change the buffer. If removing the source file fails after text was inserted, the plugin returns `false, err` without remembering a retry, because retrying could insert the same transcript twice.
 
 # `start_default_target(id)`
 
-Configures the current Neovim instance as a plugin-managed default target:
-
-1. Use the user's normal Neovim configuration, including any user-provided `require("talk2text").setup(...)` call.
-2. Register the current Neovim server as `default-nvim-target`.
-3. Load the supplied transcript ID.
-4. Configure the `qq` normal-mode mapping for the default editor buffer.
+Configures the current Neovim instance as a plugin-managed default target. It publishes `default-nvim-target`, loads the supplied transcript, makes the buffer disposable, and adds a buffer-local `qq` mapping.
 
 The output command does not call this function automatically when launching the configured default editor. Custom launch integrations may invoke it when they want this behavior.
 
-If default-target registration fails, the function reports the error in Neovim and still attempts the initial load. A successful load still removes the transcript even when registration failed.
+If target registration fails, the initial load is still attempted. If loading fails, the transcript remains available for retry.
 
-If the startup load fails, report the error in Neovim and retain the transcript for retry.
-
-The function changes the current buffer into a no-file buffer before loading the transcript.
-
-The buffer-local `qq` mapping copies the full default editor buffer content to the `+` clipboard register. If copying fails, it leaves the window open. After a successful copy, it closes the current window; Neovim exits when that is its last window. Because the transcript buffer has `buftype=nofile`, its modifications do not block closing. Its `bufhidden=wipe` setting removes the transcript buffer after its last window closes. The mapping does not force-close other windows or modified normal buffers. It does not save anything or emit output.
+The `qq` mapping copies the full buffer to the `+` clipboard and closes its window. A copy failure leaves the window open. Other windows and modified normal buffers are not force-closed.
 
 Further transcripts are loaded into the current buffer of the default editor while that Neovim instance remains the usable default target and no explicit target overrides it. If the user changes the current buffer, later transcripts are loaded into that buffer. If the explicit target changes, the default editor exits, or either target becomes stale, future transcripts follow the target resolution order described in the main spec.

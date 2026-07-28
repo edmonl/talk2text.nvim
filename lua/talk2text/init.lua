@@ -291,6 +291,8 @@ local function load(id)
 
   local removed, remove_err = uv.fs_unlink(path)
   if not removed then
+    -- Retry only when loading left the buffer unchanged; otherwise the same
+    -- transcript could be inserted twice.
     if changed_or_err then
       failed_id = nil
     else

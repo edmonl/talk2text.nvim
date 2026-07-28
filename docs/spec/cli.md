@@ -22,16 +22,11 @@ The transcript path is the command's only argument. `TALK2TEXT_OUTPUT_KIND` and 
 2. `blank`
 3. `short`
 
-Unknown metadata values, extra arguments, or other invalid invocations exit with a nonzero status. No detailed logging is required because output command logs may be discarded by `talk2text`.
+Unknown metadata values, extra arguments, or other invalid invocations exit with a nonzero status.
 
-For every kind, the transcript filename must have the canonical form `<positive-id>`, where the ID is a base-10 positive integer without a sign or leading zero. The command derives that ID after validating the path and passes only the ID to Neovim. Runtime selection inside the plugin remains governed by plugin configuration; internal remote-load and default-start adapters do not receive a runtime directory.
+For every kind, the transcript filename must have the canonical form `<positive-id>`, where the ID is a base-10 positive integer without a sign or leading zero.
 
-Exit status has only two semantic categories:
-
-1. `0`: success.
-2. Any nonzero status: failure.
-
-Specific nonzero status values are implementation details.
+Exit status is `0` for success and nonzero for failure. Specific nonzero values are not part of the contract.
 
 Notifications are best-effort. A missing or failing notification command does not change an otherwise successful exit status. Informational Neovim integration events use `TALK2TEXT_NOTIFY_LEVEL=info` and `TALK2TEXT_NOTIFY_CODE=nvim`. Output failures use `TALK2TEXT_NOTIFY_LEVEL=error` and `TALK2TEXT_NOTIFY_CODE=output-command`. Notification text is user-facing and should be chosen for the intended UX; it may include or omit the transcript ID. Diagnostic messages written to standard error should include the transcript ID whenever it is available.
 
@@ -46,71 +41,35 @@ The command uses shell-configurable hooks for default editor startup and editor 
 
 The launch command is required only when a new default editor must be started. Existing-target delivery does not require it. The focus hook is optional and skipped when empty. A missing required setting causes failure when it is needed.
 
-Each hook setting is read from its correspondingly named environment variable and has surrounding whitespace removed. Unset settings use their listed defaults. Each non-empty hook setting is trusted shell code run with `sh -c`. Hooks inherit the output command's current environment and working directory except that variables whose names start with `TALK2TEXT_NVIM_` are removed before invocation. Generated arguments are appended internally, so settings do not include `"$@"`. Runtime values are supplied as shell positional parameters and must never be interpolated into hook code. Existing-target probes and loads use MessagePack-RPC directly without invoking the launch command. For default-editor startup, the transcript path is appended to the complete launch command as its only generated argument. The focus command receives no generated arguments.
+Hook values have surrounding whitespace removed. Each non-empty value is trusted shell code run with `sh -c`. Hooks inherit the output command's environment and working directory except for variables beginning with `TALK2TEXT_NVIM_`. The launch command receives the transcript path as its only generated argument; the focus command receives none.
 
 The notification command is not a shell hook. The command uses `TALK2TEXT_NOTIFY_CMD` as an executable and appends the notification message as its only argument. Notifications use the same environment inheritance and `TALK2TEXT_NVIM_` filtering as hooks, with `TALK2TEXT_NOTIFY_LEVEL` and `TALK2TEXT_NOTIFY_CODE` set for each invocation.
 
-Notification commands and focus hooks run asynchronously after their process starts successfully. Immediate start failures and subprocess stderr are written to the output command's stderr without changing its exit status. Default-editor startup remains attached to the caller and propagates the configured shell command's exit status. Notification commands and focus hooks retain their best-effort result semantics.
-
-Users may set command hooks as environment variables for an invocation or wrapper, or copy the command and adapt its defaults. The distributed `nvim` launch default satisfies the launch-command requirement.
+Notifications and focus hooks run asynchronously and are best-effort. Startup errors and subprocess stderr are written to the output command's stderr. Default-editor startup remains attached and propagates the launch command's exit status.
 
 # `TALK2TEXT_OUTPUT_KIND=text`
 
 For normal text transcripts:
 
 1. Infer the runtime directory from `path`.
-2. Derive the positive transcript ID from the canonical filename.
-3. If `<runtime_dir>/nvim-target` exists and contains a usable Neovim server socket, call the plugin's internal load adapter with the ID in that server through the Neovim socket and read the response.
-4. If loading into `nvim-target` succeeds, exit `0`.
-5. If `nvim-target` is missing, zero-byte, or stale, try `<runtime_dir>/default-nvim-target`. A malformed or non-absolute target is fatal instead.
-6. If `<runtime_dir>/default-nvim-target` exists and contains a usable Neovim server socket, call the same internal load adapter with the ID and read the response.
-7. If loading into `default-nvim-target` succeeds, focus the default editor window when applicable, then exit `0`.
-8. If neither target file is present or reachable, start a new default Neovim editor through the configured launch command.
-9. Apply the main specification's stale-target cleanup rule before continuing to the next fallback.
+2. Try `nvim-target`, then `default-nvim-target`, following the target rules in the [main spec](../spec.md).
+3. When the default target handles the transcript, run the best-effort focus hook.
+4. When neither target is usable, start a default editor through the launch command.
 
-Successful loads into existing targets remove the transcript file. If a target is reachable but the load returns `false, err` or raises a Lua error, the command exits nonzero instead of falling back. This includes failure to remove the file after it was loaded; it does not retry the load, because retrying could append the same transcript twice. The file remains for `talk2text`'s next startup cleanup. A newly launched editor receives the transcript path and owns that file's subsequent lifecycle.
-
-If an absolute target cannot be reached as a Neovim server, the command treats that target as stale and falls back according to the target resolution order after conditionally deleting it. Successful stale deletion emits an `info` / `nvim` notification. Target read errors, a nonempty blank first line, a non-absolute socket path, cleanup failures, and reachable-target load failures are fatal and emit an `error` / `output-command` notification.
+Successful delivery to an existing target removes the transcript. A reachable target failure is fatal and is not retried elsewhere, preventing duplicate insertion. A newly launched editor owns subsequent handling of the transcript path.
 
 # `TALK2TEXT_OUTPUT_KIND=blank`
 
-For blank transcripts:
-
-1. Do not load text into Neovim.
-2. Do not start or focus the default editor.
-3. Do not change `nvim-target` or `default-nvim-target`.
-4. Attempt to remove `path`.
-5. Emit an `info` / `nvim` notification through the daemon-provided notification command.
-6. Exit `0`.
+Blank transcripts are removed best-effort and emit an `info` / `nvim` notification. They do not load text, change targets, or start or focus an editor.
 
 # `TALK2TEXT_OUTPUT_KIND=short`
 
-For short transcripts, the command is used as a shortcut to switch future text output back to the default Neovim editor:
-
-1. Infer the runtime directory from `path`.
-2. Attempt to remove `path`.
-3. Delete `<runtime_dir>/nvim-target` if it exists.
-4. Do not delete or change `<runtime_dir>/default-nvim-target`.
-5. Do not start or focus the default editor.
-6. Emit an `info` / `nvim` notification through the daemon-provided notification command, whether or not `nvim-target` existed.
-7. Exit `0` after a successful target reset, including when `nvim-target` is already absent. Exit nonzero if the target cannot be reset.
-
-# Default Neovim Editor
-
-The default editor is the command-started Neovim instance used when no explicit target is usable.
-
-The command uses `<runtime_dir>/default-nvim-target` to detect and reuse an existing default editor. If that target file contains a usable Neovim server socket, the command loads the transcript through that server instead of starting a new editor.
-
-When an existing default editor is reused, the command should focus its window when that window exists. Focusing is best-effort; a missing or failing focus command is not required for a successful transcript load.
+Short transcripts switch future output back to the default editor. The command removes the transcript best-effort, deletes `nvim-target`, retains `default-nvim-target`, and emits an `info` / `nvim` notification. It does not start or focus an editor. An already-absent target is successful; a target-reset failure is fatal.
 
 # Default Editor Startup
 
-Default editor startup is the part of the spec that chooses how to make a Neovim UI appear. The launch command is a complete command, defaulting to `nvim`, and receives the transcript path as its only generated argument. Launching does not change the output command's current working directory.
+The launch command is complete, defaults to `nvim`, and receives the transcript path as its only generated argument. It runs in the output command's working directory. A missing launch command is fatal when startup is needed.
 
 If default-editor startup launches a graphical application, the output command must have the graphical-session environment required by that application. This is especially relevant when a long-running service starts before the graphical session and later invokes the output command.
 
-The command starts the new editor but does not poll for target registration or make the initial load through a separate client call. The resulting process may remain running for the editor session or detach; its process lifetime and exit status are not proof that the transcript was processed.
-
-A missing launch command causes failure when default-editor startup is needed.
-
-The default editor uses the user's normal Neovim configuration. With the default `nvim` launch command, Neovim opens the transcript path as a normal file. The output command does not inject startup commands, call `setup()`, register `default-nvim-target`, or remove the launched transcript. A custom launch integration owns any additional target registration, buffer setup, or cleanup behavior.
+With the default launch command, Neovim uses the user's normal configuration and opens the transcript as a normal file. Custom launch integrations own any additional target registration, buffer setup, or cleanup.
