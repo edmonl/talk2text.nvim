@@ -20,6 +20,7 @@ import (
 )
 
 const (
+	nvimEnvPrefix = "TALK2TEXT_NVIM_"
 	outputKindEnv = "TALK2TEXT_OUTPUT_KIND"
 	remoteLoadLua = `local called, loaded = pcall(require("talk2text").load, ...); return called and loaded`
 )
@@ -205,7 +206,7 @@ func (c *Command) launchDefault() error {
 		return err
 	}
 	code := c.launchCmd + ` "$@"`
-	return syscall.Exec(shell, []string{"sh", "-c", code, "talk2text-nvim-launch", c.transcriptPath}, os.Environ())
+	return syscall.Exec(shell, []string{"sh", "-c", code, "talk2text-nvim-launch", c.transcriptPath}, childEnvironment())
 }
 
 // HandleBlank removes a blank transcript and notifies the user.
@@ -246,7 +247,7 @@ func (c *Command) notify(level, code, message string) {
 	}
 
 	cmd := exec.Command(c.notifyCmd, message)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(childEnvironment(),
 		"TALK2TEXT_NOTIFY_LEVEL="+level,
 		"TALK2TEXT_NOTIFY_CODE="+code,
 	)
@@ -262,7 +263,9 @@ func (c *Command) focusDefault() {
 
 	shell, err := c.shell()
 	if err == nil {
-		err = util.RunCmdDetached(exec.Command(shell, "-c", c.focusCmd))
+		cmd := exec.Command(shell, "-c", c.focusCmd)
+		cmd.Env = childEnvironment()
+		err = util.RunCmdDetached(cmd)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "talk2text-nvim: transcript %d has focus command error: %v\n", c.transcriptID, err)
@@ -278,4 +281,15 @@ func (c *Command) shell() (string, error) {
 		c.shellPath = path
 	}
 	return c.shellPath, nil
+}
+
+func childEnvironment() []string {
+	environment := os.Environ()
+	filtered := environment[:0]
+	for _, setting := range environment {
+		if !strings.HasPrefix(setting, nvimEnvPrefix) {
+			filtered = append(filtered, setting)
+		}
+	}
+	return filtered
 }

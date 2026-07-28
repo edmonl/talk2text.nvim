@@ -51,6 +51,30 @@ func TestNewCommand(t *testing.T) {
 
 }
 
+func TestChildEnvironmentRemovesNvimVariables(t *testing.T) {
+	t.Setenv("TALK2TEXT_NVIM_FOCUS_CMD", "focus")
+	t.Setenv("TALK2TEXT_NVIM_CUSTOM", "custom")
+	t.Setenv(outputKindEnv, "text")
+	t.Setenv("TALK2TEXT_NOTIFY_CMD", "notify")
+
+	environment := make(map[string]string)
+	for _, setting := range childEnvironment() {
+		name, value, _ := strings.Cut(setting, "=")
+		if strings.HasPrefix(name, nvimEnvPrefix) {
+			t.Fatalf("child environment contains %s", name)
+		}
+		environment[name] = value
+	}
+	for name, want := range map[string]string{
+		outputKindEnv:          "text",
+		"TALK2TEXT_NOTIFY_CMD": "notify",
+	} {
+		if got := environment[name]; got != want {
+			t.Errorf("child environment %s = %q, want %q", name, got, want)
+		}
+	}
+}
+
 func newTestCommand(t *testing.T) *Command {
 	t.Helper()
 	runtimeDir := t.TempDir()

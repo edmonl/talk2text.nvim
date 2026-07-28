@@ -16,9 +16,12 @@ func RemovePath(path string) error {
 	return err
 }
 
-// RunCmdDetached starts a command in a new session with inherited stderr and
-// releases its process handle instead of waiting for it.
+// RunCmdDetached starts a command in a new session, explicitly inherits the
+// environment when none is configured, and releases its process handle.
 func RunCmdDetached(cmd *exec.Cmd) error {
+	if cmd.Env == nil {
+		cmd.Env = os.Environ()
+	}
 	cmd.Stderr, cmd.SysProcAttr = os.Stderr, &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		return err
