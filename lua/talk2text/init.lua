@@ -29,13 +29,13 @@ local function get_runtime_dir()
   if runtime_dir then
     config.runtime_dir = runtime_dir
   end
-  return runtime_dir, err
+  return runtime_dir, err or 'talk2text service is unavailable: no runtime directory was found'
 end
 
 local function read_transcript_file(path)
-  local stat, stat_err = uv.fs_stat(path)
+  local stat, stat_err, stat_err_name = uv.fs_stat(path)
   if not stat then
-    return nil, ('cannot inspect transcript: %s'):format(stat_err)
+    return nil, ('cannot inspect transcript: %s'):format(stat_err), stat_err_name == 'ENOENT'
   end
   if stat.type ~= 'file' then
     return nil, 'transcript is not a regular file'
@@ -43,7 +43,9 @@ local function read_transcript_file(path)
 
   local file, open_err = io.open(path, 'rb')
   if not file then
-    return nil, ('cannot open transcript: %s'):format(open_err)
+    -- The transcript can disappear after the initial stat.
+    local _, _, retry_stat_err_name = uv.fs_stat(path)
+    return nil, ('cannot open transcript: %s'):format(open_err), retry_stat_err_name == 'ENOENT'
   end
 
   local contents, read_err = file:read('*a')
@@ -201,33 +203,36 @@ local function configure_default_mapping(buffer)
   })
 end
 
+---Configure the selected runtime without emitting notifications.
+---@param opts? {runtime_dir?: string}
+---@return string|nil err Nil when configured or when automatic discovery finds no service.
 local function setup(opts)
   opts = opts or {}
   if type(opts) ~= 'table' then
-    return false, 'setup expects a table'
+    return 'setup expects a table'
   end
   for key in pairs(opts) do
     if key ~= 'runtime_dir' then
-      return false, 'unknown option: ' .. tostring(key)
+      return 'unknown option: ' .. tostring(key)
     end
   end
   local runtime_dir, runtime_err = runtime.resolve(opts.runtime_dir)
   if not runtime_dir then
-    return false, runtime_err
+    return runtime_err
   end
   if config.runtime_dir == runtime_dir then
-    return true
+    return nil
   end
   if config.runtime_dir ~= nil then
-    return false, ('cannot change already resolved runtime directory %s to %s')
+    return ('cannot change already resolved runtime directory %s to %s')
       :format(config.runtime_dir, runtime_dir)
   end
   local daemon_ok, daemon_err = runtime.check_daemon(runtime_dir)
   if not daemon_ok then
-    return false, daemon_err
+    return daemon_err
   end
   config.runtime_dir = runtime_dir
-  return true
+  return nil
 end
 
 ---Configure talk2text.nvim.
@@ -235,8 +240,8 @@ end
 ---@return boolean ok
 ---@return string|nil err
 function M.setup(opts)
-  local ok, err = setup(opts)
-  if not ok then
+  local err = setup(opts)
+  if err then
     notify_error(err)
     return false, err
   end
@@ -271,9 +276,13 @@ local function load(id)
   end
   local path = ('%s/transcripts/%d'):format(runtime_dir, id)
 
-  local contents, read_err = read_transcript_file(path)
+  local contents, read_err, missing = read_transcript_file(path)
   if contents == nil then
-    failed_id = id
+    if retried_id ~= nil and missing then
+      failed_id = nil
+    else
+      failed_id = id
+    end
     return false, read_err, id
   end
 

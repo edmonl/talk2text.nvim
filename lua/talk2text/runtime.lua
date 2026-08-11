@@ -20,7 +20,7 @@ end
 ---Validate a runtime directory and distinguish an absent path from other failures.
 ---@param path any
 ---@return boolean|nil exists True for a valid directory, false when absent, and nil for other failures.
----@return string|nil err
+---@return string|nil err Non-nil only when validation failed for a reason other than absence.
 local function validate_runtime_dir(path)
   if type(path) ~= 'string' or path == '' then
     return nil, 'runtime directory must be a non-empty string'
@@ -32,7 +32,7 @@ local function validate_runtime_dir(path)
   local stat, err, err_name = uv.fs_stat(path)
   if not stat then
     if err_name == 'ENOENT' then
-      return false, ('runtime directory is unavailable: %s'):format(err)
+      return false
     end
     return nil, ('runtime directory is unavailable: %s'):format(err)
   end
@@ -44,12 +44,15 @@ end
 
 ---Resolve and validate the talk2text runtime directory.
 ---@param configured string|nil
----@return string|nil path
----@return string|nil err
+---@return string|nil path The selected directory, or nil when resolution did not select one.
+---@return string|nil err A validation error, or nil when all automatic candidates are absent.
 function M.resolve(configured)
   if configured ~= nil then
     local exists, err = validate_runtime_dir(configured)
-    if not exists then
+    if exists == false then
+      return nil, 'configured runtime directory does not exist: ' .. configured
+    end
+    if err then
       return nil, err
     end
     return configured
@@ -62,7 +65,7 @@ function M.resolve(configured)
     if exists then
       return path
     end
-    if exists == nil then
+    if err then
       return nil, err
     end
   end
@@ -75,7 +78,7 @@ function M.resolve(configured)
     if exists then
       return path
     end
-    if exists == nil then
+    if err then
       return nil, err
     end
   end
@@ -85,7 +88,12 @@ function M.resolve(configured)
   if exists then
     return path
   end
-  return nil, err
+  if err then
+    return nil, err
+  end
+  -- Leave absence distinct from validation failures so each public API can
+  -- decide whether exhausting automatic discovery is an error.
+  return nil
 end
 
 ---Check that the daemon socket accepts a connection.

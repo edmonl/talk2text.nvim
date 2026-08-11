@@ -28,7 +28,7 @@ The command derives the runtime directory and transcript ID from the absolute tr
 
 This integration owns transcript cleanup. Delivery to an existing target removes text only after success; a newly launched editor owns the supplied path. Blank and short transcripts are removed before their kind-specific behavior, and cleanup failure is best-effort.
 
-Neither the plugin nor the command creates the runtime directory. A missing explicit runtime directory, no existing automatic-discovery candidate, or an invalid or unavailable candidate is an error. The `talk2text` daemon is expected to create and own the runtime directory before this integration is used.
+Neither the plugin nor the command creates the runtime directory. A missing explicit runtime directory or an invalid or unavailable candidate is an error. When automatic discovery finds no existing candidate, `setup()` succeeds silently so configurations can load on machines without the service; runtime-dependent API calls still report the missing service as an error. The `talk2text` daemon is expected to create and own the runtime directory before this integration is used.
 
 # Target Files
 

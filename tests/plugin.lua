@@ -75,9 +75,26 @@ local function run()
   assert_equal(invalid_runtime, nil, "invalid XDG runtime unexpectedly fell back")
   assert_true(invalid_err:match("not a directory") ~= nil, "invalid XDG runtime omitted the cause")
 
+  vim.env.XDG_RUNTIME_DIR = root .. "/missing-xdg-base"
+  vim.env.TMPDIR = root .. "/missing-tmp-base"
+  local system_fallback = ("/tmp/run-%d/talk2text"):format(uv.getuid())
+  local original_fs_stat = uv.fs_stat
+  uv.fs_stat = function(path, ...)
+    if path == system_fallback then
+      return nil, "ENOENT: no such file or directory: " .. path, "ENOENT"
+    end
+    return original_fs_stat(path, ...)
+  end
+  local resolve_called, absent_runtime, absent_err = pcall(runtime.resolve)
+  uv.fs_stat = original_fs_stat
+  assert_true(resolve_called, "all-missing runtime resolution raised an error: " .. tostring(absent_runtime))
+  assert_equal(absent_runtime, nil, "all-missing runtime unexpectedly resolved")
+  assert_equal(absent_err, nil, "all-missing runtime returned an error")
+
   local fallback_transcript_dir = fallback_runtime .. "/transcripts"
   vim.fn.mkdir(fallback_transcript_dir, "p", 448)
   vim.env.XDG_RUNTIME_DIR = root .. "/missing-xdg-base"
+  vim.env.TMPDIR = fallback_base
   local first_lazy_transcript = fallback_transcript_dir .. "/38"
   write_file(first_lazy_transcript, "first lazy load.")
   local talk2text = require("talk2text")
@@ -106,6 +123,35 @@ local function run()
   assert_true(
     exists(fallback_runtime .. "/nvim-target"),
     "rejected runtime change removed the published target"
+  )
+
+  package.loaded["talk2text"] = nil
+  talk2text = require("talk2text")
+
+  local original_resolve = runtime.resolve
+  runtime.resolve = function(configured)
+    if configured == nil then
+      return nil
+    end
+    return original_resolve(configured)
+  end
+  local absent_setup_notifications, absent_setup_ok, absent_setup_err = capture_notifications(function()
+    return talk2text.setup()
+  end)
+  assert_true(absent_setup_ok, "setup did not accept an absent service")
+  assert_equal(absent_setup_err, nil, "absent-service setup returned an error")
+  assert_equal(#absent_setup_notifications, 0, "absent-service setup emitted a notification")
+
+  local absent_load_notifications, absent_load_ok, absent_load_err = capture_notifications(function()
+    return talk2text.load(37)
+  end)
+  runtime.resolve = original_resolve
+  assert_false(absent_load_ok, "load unexpectedly accepted an absent service")
+  assert_true(absent_load_err:match("no runtime directory") ~= nil, "absent-service load omitted the cause")
+  assert_equal(#absent_load_notifications, 1, "absent-service load did not notify exactly once")
+  assert_true(
+    absent_load_notifications[1][1]:match("no runtime directory") ~= nil,
+    "absent-service load notification omitted the cause"
   )
 
   package.loaded["talk2text"] = nil
@@ -265,6 +311,31 @@ local function run()
   )
   assert_equal(retry_success_notifications[1][2], vim.log.levels.INFO, "successful retry notification level")
   assert_equal(vim.api.nvim_get_current_line(), "third retried text", "retried line")
+
+  local stale_retry = transcript_dir .. "/7"
+  write_file(stale_retry, "stale retry text")
+  vim.api.nvim_set_option_value("modifiable", false, { buf = 0 })
+  local stale_failure_notifications, stale_failure_ok = capture_notifications(function()
+    return talk2text.load(7)
+  end)
+  vim.api.nvim_set_option_value("modifiable", true, { buf = 0 })
+  assert_false(stale_failure_ok, "unmodifiable buffer unexpectedly accepted stale retry transcript")
+  assert_equal(#stale_failure_notifications, 1, "stale retry failure did not notify exactly once")
+  assert_true(exists(stale_retry), "failed stale retry load removed its transcript")
+  assert_true(uv.fs_unlink(stale_retry), "failed to remove stale retry transcript")
+
+  local stale_retry_notifications, stale_retry_ok = capture_notifications(function()
+    return talk2text.load()
+  end)
+  assert_false(stale_retry_ok, "missing remembered transcript unexpectedly loaded")
+  assert_equal(#stale_retry_notifications, 1, "missing remembered transcript did not notify exactly once")
+  assert_true(stale_retry_notifications[1][1]:match("7") ~= nil, "stale retry notification omitted its ID")
+
+  local cleared_retry_notifications, cleared_retry_ok = capture_notifications(function()
+    return talk2text.load()
+  end)
+  assert_true(cleared_retry_ok, "retry after stale ID was not a no-op")
+  assert_equal(#cleared_retry_notifications, 0, "retry after stale ID emitted a notification")
 
   local blocked = transcript_dir .. "/6"
   write_file(blocked, "blocked text")

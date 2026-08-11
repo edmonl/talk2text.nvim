@@ -25,7 +25,7 @@ require("talk2text").setup({
 })
 ```
 
-`setup()` selects and validates the runtime directory and requires the daemon to be available. The first successfully selected runtime remains fixed for the Neovim session; selecting it again succeeds, while switching to another runtime fails. Calling `setup()` does not make the current Neovim instance the target.
+`setup()` selects and validates the runtime directory and requires the daemon to be available. When automatic discovery finds no runtime directory, it succeeds silently without selecting one; a later call can retry discovery. Invalid candidates and a missing explicit `runtime_dir` remain errors. The first successfully selected runtime remains fixed for the Neovim session; selecting it again succeeds, while switching to another runtime fails. Calling `setup()` does not make the current Neovim instance the target.
 
 # `set_target([id])`
 

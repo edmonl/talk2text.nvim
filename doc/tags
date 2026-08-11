@@ -1,0 +1,16 @@
+talk2text	talk2text.txt	/*talk2text*
+talk2text-api	talk2text.txt	/*talk2text-api*
+talk2text-contents	talk2text.txt	/*talk2text-contents*
+talk2text-default-editor	talk2text.txt	/*talk2text-default-editor*
+talk2text-insertion	talk2text.txt	/*talk2text-insertion*
+talk2text-requirements	talk2text.txt	/*talk2text-requirements*
+talk2text-runtime	talk2text.txt	/*talk2text-runtime*
+talk2text-setup	talk2text.txt	/*talk2text-setup*
+talk2text-target	talk2text.txt	/*talk2text-target*
+talk2text-troubleshooting	talk2text.txt	/*talk2text-troubleshooting*
+talk2text.load()	talk2text.txt	/*talk2text.load()*
+talk2text.nvim	talk2text.txt	/*talk2text.nvim*
+talk2text.set_target()	talk2text.txt	/*talk2text.set_target()*
+talk2text.setup()	talk2text.txt	/*talk2text.setup()*
+talk2text.start_default_target()	talk2text.txt	/*talk2text.start_default_target()*
+talk2text.txt	talk2text.txt	/*talk2text.txt*

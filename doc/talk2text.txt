@@ -1,0 +1,216 @@
+*talk2text.txt* *talk2text.nvim* Neovim integration for the talk2text daemon
+
+==============================================================================
+CONTENTS                                                     *talk2text-contents*
+
+1. Introduction ................................................. |talk2text|
+2. Requirements ..................................... |talk2text-requirements|
+3. Setup ................................................... |talk2text-setup|
+4. Target selection ....................................... |talk2text-target|
+5. Lua API .................................................... |talk2text-api|
+6. Transcript insertion ............................... |talk2text-insertion|
+7. Default editor ................................... |talk2text-default-editor|
+8. Runtime directory ..................................... |talk2text-runtime|
+9. Troubleshooting ................................. |talk2text-troubleshooting|
+
+==============================================================================
+1. Introduction                                                *talk2text*
+
+talk2text.nvim connects the talk2text speech-to-text daemon to Neovim. The
+plugin can make the current Neovim instance a transcript target, insert
+transcripts into the current buffer, and retry failed loads.
+
+The companion `talk2text-nvim` executable must be installed as the daemon's
+output command. Start the daemon with: >
+
+    talk2text daemon -out-cmd talk2text-nvim
+<
+The plugin defines no commands or mappings by default.
+
+==============================================================================
+2. Requirements                                   *talk2text-requirements*
+
+- Linux.
+- Neovim 0.10 or newer with LuaJIT.
+- A running talk2text daemon.
+- The `talk2text-nvim` output command on `$PATH`, or configured by full path.
+
+The daemon owns and creates the runtime directory used by the integration.
+
+==============================================================================
+3. Setup                                                   *talk2text-setup*
+
+Call |talk2text.setup()| from your Neovim configuration: >
+
+    require("talk2text").setup()
+<
+No mapping is installed automatically. A typical target-selection mapping is: >
+
+    vim.keymap.set("n", "<leader>/", function()
+      require("talk2text").set_target(vim.v.count)
+    end, { desc = "Use this Neovim for talk2text" })
+<
+With this mapping, a positive |v:count| selects this Neovim and loads that
+transcript ID. With no count, it selects this Neovim and retries the most
+recent failed load, if any.
+
+To use a non-default runtime directory: >
+
+    require("talk2text").setup({
+      runtime_dir = "/path/to/runtime",
+    })
+<
+The same runtime directory must be used by the daemon. The first successfully
+selected runtime directory remains fixed for the Neovim session.
+
+==============================================================================
+4. Target selection                                     *talk2text-target*
+
+Calling |talk2text.set_target()| makes the current Neovim instance the
+explicit target. The plugin starts a Neovim server when necessary and removes
+its target on exit unless another instance has replaced it.
+
+Text delivery uses targets in this order:
+
+1. The explicitly selected Neovim instance.
+2. An existing plugin-managed default editor.
+3. A newly launched default editor.
+
+A short transcript clears the explicit target so future text uses the default
+editor. A blank transcript does not change target selection.
+
+==============================================================================
+5. Lua API                                                  *talk2text-api*
+
+setup({opts})                                           *talk2text.setup()*
+    Configure the plugin and verify that the selected runtime directory and
+    daemon are available. Calling setup again for the selected runtime
+    succeeds; switching runtimes during the session fails.
+
+    Parameters: ~
+      {opts}  Optional table with:
+              runtime_dir  Absolute runtime directory. When omitted, the
+                           normal discovery order is used.
+
+    Return: ~
+      true on success, or false and an error message on failure.
+
+    If automatic discovery finds no runtime directory, setup() succeeds
+    silently without selecting one. Later API calls retry discovery; unlike
+    setup(), runtime-dependent calls report an absent service as an error.
+
+    setup() does not make the current Neovim instance a target.
+
+set_target([id])                                  *talk2text.set_target()*
+    Make the current Neovim instance the explicit target, then apply the same
+    ID behavior as |talk2text.load()|. Target selection remains successful
+    even when the subsequent load fails.
+
+    Parameters: ~
+      [id]  Positive safe integer transcript ID. Zero or nil retries the most
+            recent failed ID.
+
+    Return: ~
+      true on success, or false and an error message on failure.
+
+load([id])                                               *talk2text.load()*
+    Load a transcript from `<runtime_dir>/transcripts/<id>` into the current
+    buffer. See |talk2text-insertion|.
+
+    Parameters: ~
+      [id]  Integer from 1 through 9007199254740991. Zero or nil retries the
+            most recent failed ID; it is a successful no-op when none exists.
+
+    Return: ~
+      true on success, or false and an error message on failure.
+
+start_default_target({id})               *talk2text.start_default_target()*
+    Configure the current Neovim instance as a plugin-managed default editor.
+    The function publishes the default target, loads {id}, makes the transcript
+    buffer disposable, and installs a buffer-local `qq` mapping.
+
+    This function is intended for custom default-editor launch integrations.
+    The standard output command does not call it automatically.
+
+    If target registration fails, loading is still attempted. This function
+    reports failures through Neovim notifications and has no return value.
+
+==============================================================================
+6. Transcript insertion                              *talk2text-insertion*
+
+Leading and trailing transcript whitespace is discarded.
+
+A transcript containing no whitespace and no trailing punctuation is inserted
+as a word. It is placed after the word under the cursor and before trailing
+punctuation. Existing spacing is preserved where possible, and the cursor
+moves to the inserted word.
+
+Other non-empty transcripts are appended at the current line. Trailing spaces
+on the current line are normalized, interior transcript lines are preserved,
+and the cursor moves to the final inserted line.
+
+An empty transcript does not change the buffer. The source file is removed
+only after a successful load or no-op.
+
+On failure, the plugin retains the transcript ID for |talk2text.load()| retry
+when retrying cannot duplicate inserted text. A successful retry emits an
+informational notification. If a retry finds that the transcript no longer
+exists, the failed ID is cleared after reporting that failure.
+
+==============================================================================
+7. Default editor                                *talk2text-default-editor*
+
+By default, `talk2text-nvim` starts `nvim <transcript-path>`, which opens the
+transcript as a normal file using the user's Neovim configuration.
+
+Custom launch integrations may call |talk2text.start_default_target()| to use
+a disposable plugin-managed buffer. Its buffer-local `qq` mapping copies the
+full buffer to the `+` clipboard and closes that window. A clipboard failure
+leaves the window open and reports an error.
+
+Further transcripts are loaded into the default editor's current buffer while
+that editor remains the usable default target.
+
+==============================================================================
+8. Runtime directory                                   *talk2text-runtime*
+
+When `runtime_dir` is not configured, the plugin checks:
+
+1. `$XDG_RUNTIME_DIR/talk2text`
+2. `$TMPDIR/run-<uid>/talk2text`
+3. `/tmp/run-<uid>/talk2text`
+
+Missing candidates are skipped. The first existing directory is selected. An
+invalid candidate stops discovery with an error. The daemon must create the
+directory and listen on `<runtime_dir>/daemon.sock` before setup.
+
+If every automatic-discovery candidate is missing, setup() succeeds silently.
+Other runtime-dependent API calls report the absent service as an error. A
+missing explicitly configured `runtime_dir` is also an error.
+
+The selected runtime directory is cached for the Neovim session. Failed
+discovery may be retried.
+
+==============================================================================
+9. Troubleshooting                               *talk2text-troubleshooting*
+
+Runtime or daemon unavailable ~
+    Start the talk2text daemon and confirm that the daemon and plugin resolve
+    the same runtime directory.
+
+Transcripts do not reach Neovim ~
+    Confirm that `talk2text-nvim` is installed, the daemon uses it as the
+    output command, and |talk2text.set_target()| succeeded.
+
+Retry a failed transcript ~
+    Call `require("talk2text").load()` or select the target with no count.
+
+Default editor does not start ~
+    Confirm that `nvim` is on `$PATH` or configure
+    `TALK2TEXT_NVIM_LAUNCH_CMD` for the output command.
+
+`qq` cannot copy from the default editor ~
+    Run |:checkhealth| and verify that Neovim's `+` clipboard provider works.
+
+==============================================================================
+vim:tw=78:ts=8:noet:ft=help:norl:
